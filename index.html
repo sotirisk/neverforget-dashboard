@@ -155,19 +155,19 @@ ${content}`;
 
             statusDiv.innerText = `2/2: Saving ${flashcards.length} flashcards to Supabase...`;
 
-            // Prepare records matching Supabase column names
-            const recordsToInsert = flashcards.map(card => ({
-                question: card.question,
-                answer: card.answer,
-                interval: 0,
-                ease_factor: 2.5
-            }));
+const recordsToInsert = flashcards.map(card => ({
+    user_id: crypto.randomUUID(),
+    question: card.question,
+    answer: card.answer,
+    interval: 0,
+    ease_factor: 2.5
+}));
 
-            const { data: dbData, error: dbError } = await supabaseClient
-                .from('flashcards')
-                .insert(recordsToInsert);
+const { data: dbData, error: dbError } = await supabaseClient
+    .from('flashcards')
+    .insert(recordsToInsert);
 
-            if (dbError) throw dbError;
+if (dbError) throw dbError;
 
             statusDiv.style.color = 'green';
             statusDiv.innerText = `Success! Created and stored ${flashcards.length} flashcards in Supabase.`;
