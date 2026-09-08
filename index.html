@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <title>NeverForget - Content Ingestion</title>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; margin: 40px; background-color: #f4f6f8; }
+        .card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+        textarea { width: 100%; height: 180px; margin-top: 10px; margin-bottom: 10px; padding: 10px; box-sizing: border-box; font-size: 14px; }
+        input[type="file"] { margin-bottom: 10px; }
+        button { background-color: #2563eb; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px; }
+        button:disabled { background-color: #93c5fd; cursor: not-allowed; }
+        #status { margin-top: 15px; font-weight: bold; word-break: break-word; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>NeverForget - Εισαγωγή Υλικού</h2>
+    <p>Ανέβασε αρχείο κειμένου (.txt, .md) ή επικόλλησε το κείμενό σου παρακάτω:</p>
+    
+    <input type="file" id="fileInput" accept=".txt,.md">
+    <p style="margin: 5px 0; color: #666;">ή</p>
+    <textarea id="textInput" placeholder="Επικόλλησε εδώ σημειώσεις, άρθρα ή υλικό που θέλεις να μάθεις..."></textarea>
+    
+    <button id="processBtn" onclick="processContent()">Επεξεργασία & Δημιουργία Flashcards</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    // 1. Credentials Configuration
+    const SUPABASE_URL = 'https://drfsdxongvpgvdcoibxd.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Αντικατάστησε με το Supabase anon key σου
+    const GEMINI_API_KEY = 'AIzaSyDU6GCCNgHdt795eAJDXORltNzvKDds3w0';       // Αντικατάστησε με το Gemini API Key σου
+
+    // Χρήση supabaseClient για αποφυγή conflict με το global object του SDK
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 2. Αυτόματη ανάγνωση αρχείου στο textarea
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('textInput').value = e.target.result;
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.color = '#2563eb';
+            statusDiv.innerText = 'Το αρχείο φορτώθηκε επιτυχώς στο πλαίσιο κειμένου.';
+        };
+        reader.onerror = function() {
+            alert('Σφάλμα κατά την ανάγνωση του αρχείου.');
+        };
+        reader.readAsText(file);
+    });
+
+    // 3. Επεξεργασία Περιεχομένου & Δημιουργία Flashcards
+    async function processContent() {
+        const text = document.getElementById('textInput').value.trim();
+        const statusDiv = document.getElementById('status');
+        const btn = document.getElementById('processBtn');
+
+        if (!text) {
+            alert('Παρακαλώ βεβαιωθείτε ότι το πλαίσιο κειμένου περιέχει υλικό.');
+            return;
+        }
+
+        btn.disabled = true;
+        statusDiv.style.color = '#333';
+        statusDiv.innerText = 'Αποστολή στο Gemini API...';
+
+        try {
+            const prompt = `
+            Analyze the following text and extract key information into high-quality active recall Question-Answer pairs for flashcards.
+            Requirements:
+            - Create clear, specific questions.
+            - Provide concise, accurate answers.
+            - Respond strictly in JSON format without markdown code blocks.
+
+            JSON Structure:
+            [
+              {"question": "Question text here...", "answer": "Answer text here..."}
+            ]
+
+            Source Text:
+            ${text}
+            `;
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json" }
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(`Gemini API Error: ${errData.error?.message || response.statusText}`);
+            }
+
+            const data = await response.json();
+            const jsonText = data.candidates[0].content.parts[0].text;
+            const flashcards = JSON.parse(jsonText);
+
+            statusDiv.innerText = `Δημιουργήθηκαν ${flashcards.length} κάρτες. Αποθήκευση στο Supabase...`;
+
+            // Χρήση σταθερού dummy UUID για δοκιμαστικές εγγραφές
+            const cardsToInsert = flashcards.map(card => ({
+                user_id: '00000000-0000-0000-0000-000000000000',
+                question: card.question,
+                answer: card.answer,
+                interval: 1,
+                ease_factor: 2.5,
+                next_review_date: new Date().toISOString()
+            }));
+
+            const { error } = await supabaseClient.from('flashcards').insert(cardsToInsert);
+
+            if (error) throw error;
+
+            statusDiv.style.color = 'green';
+            statusDiv.innerText = `Επιτυχία! Προστέθηκαν ${flashcards.length} κάρτες στη βάση δεδομένων.`;
+
+        } catch (err) {
+            console.error('Processing Error:', err);
+            statusDiv.style.color = 'red';
+            statusDiv.innerText = 'Σφάλμα: ' + err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
