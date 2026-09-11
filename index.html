@@ -83,6 +83,14 @@
             <button onclick="nextCard()">Next</button>
         </div>
 
+        <button
+            id="delete-card-btn"
+            onclick="deleteCurrentCard()"
+            style="margin-top: 10px; background-color: #dc2626;"
+        >
+            Delete Current Card
+        </button>
+
         <div id="ai-section" style="margin-top: 15px; border-top: 1px solid #e0e0e0; padding-top: 10px;">
             <div style="display: flex; gap: 8px; margin-top: 10px;">
                 <input
@@ -327,6 +335,7 @@ ${content}`;
         responseBox.style.display = 'block';
         responseBox.innerHTML = '<em>Thinking...</em>';
         createCardButton.style.display = 'none';
+        createCardButton.innerText = 'Create Card';
         askButton.disabled = true;
 
         try {
@@ -401,6 +410,53 @@ Learner Question: "${userQuery}"`;
             alert(`Error creating card: ${err.message}`);
         } finally {
             createCardButton.disabled = false;
+        }
+    }
+
+    async function deleteCurrentCard() {
+        if (cards.length === 0) return;
+
+        const currentCard = cards[currentIndex];
+        if (!confirm('Delete this flashcard permanently?')) return;
+
+        const deleteButton = document.getElementById('delete-card-btn');
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+        if (!supabaseKey) {
+            alert('Please provide your Supabase Anon Key first.');
+            return;
+        }
+
+        initSupabase(supabaseKey);
+        deleteButton.disabled = true;
+
+        try {
+            const { error } = await supabaseClient
+                .from('flashcards')
+                .delete()
+                .eq('id', currentCard.id);
+
+            if (error) throw error;
+
+            cards.splice(currentIndex, 1);
+            lastAIQuestion = '';
+            lastAIAnswer = '';
+            document.getElementById('ai-response-box').style.display = 'none';
+            document.getElementById('create-card-btn').style.display = 'none';
+
+            if (cards.length === 0) {
+                document.getElementById('reviewSection').style.display = 'none';
+                alert('Flashcard deleted. No cards remain.');
+                return;
+            }
+
+            currentIndex = Math.min(currentIndex, cards.length - 1);
+            showingAnswer = false;
+            renderCard();
+        } catch (err) {
+            console.error(err);
+            alert(`Error deleting card: ${err.message}`);
+        } finally {
+            deleteButton.disabled = false;
         }
     }
 </script>
