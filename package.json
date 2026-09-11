@@ -1,0 +1,28 @@
+{
+  "name": "neverforget-dashboard",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "mkdir -p www && cp src/index.html www/index.html",
+    "sync": "npm run build && npx cap sync android"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sotirisk/neverforget-dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sotirisk/neverforget-dashboard/issues"
+  },
+  "homepage": "https://github.com/sotirisk/neverforget-dashboard#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/local-notifications": "^8.3.1"
+  },
+  "description": ""
+}
