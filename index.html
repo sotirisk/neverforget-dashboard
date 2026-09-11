@@ -104,6 +104,13 @@
                 id="ai-response-box"
                 style="margin-top: 10px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; font-size: 14px; display: none;"
             ></div>
+            <button
+                id="create-card-btn"
+                onclick="createCardFromAIAnswer()"
+                style="margin-top: 10px; padding: 8px 16px; background-color: #2563eb; display: none;"
+            >
+                Create Card
+            </button>
         </div>
     </div>
 </div>
@@ -115,6 +122,8 @@
     let cards = [];
     let currentIndex = 0;
     let showingAnswer = false;
+    let lastAIQuestion = '';
+    let lastAIAnswer = '';
 
     // Load credentials on startup
     document.addEventListener('DOMContentLoaded', async () => {
@@ -308,6 +317,7 @@ ${content}`;
         const inputEl = document.getElementById('ai-question-input');
         const responseBox = document.getElementById('ai-response-box');
         const askButton = document.getElementById('ask-ai-btn');
+        const createCardButton = document.getElementById('create-card-btn');
         const userQuery = inputEl.value.trim();
         const apiKey = document.getElementById('apiKeyInput').value.trim();
         const cardText = document.getElementById('cardBox')?.innerText || '';
@@ -316,6 +326,7 @@ ${content}`;
 
         responseBox.style.display = 'block';
         responseBox.innerHTML = '<em>Thinking...</em>';
+        createCardButton.style.display = 'none';
         askButton.disabled = true;
 
         try {
@@ -334,13 +345,49 @@ ${content}`;
             }
 
             const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+            lastAIQuestion = userQuery;
+            lastAIAnswer = reply;
             responseBox.innerText = reply;
+            createCardButton.style.display = 'block';
             inputEl.value = '';
         } catch (err) {
             console.error(err);
             responseBox.innerText = 'Error connecting to AI assistant. Check your API key and network connection.';
         } finally {
             askButton.disabled = false;
+        }
+    }
+
+    async function createCardFromAIAnswer() {
+        const createCardButton = document.getElementById('create-card-btn');
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+
+        if (!lastAIQuestion || !lastAIAnswer || !supabaseKey) {
+            alert('Please provide a Supabase Anon Key and ask a question first.');
+            return;
+        }
+
+        initSupabase(supabaseKey);
+        createCardButton.disabled = true;
+
+        try {
+            const { error } = await supabaseClient.from('flashcards').insert({
+                user_id: crypto.randomUUID(),
+                question: lastAIQuestion,
+                answer: lastAIAnswer,
+                interval: 0,
+                ease_factor: 2.5
+            });
+
+            if (error) throw error;
+
+            createCardButton.innerText = 'Card Created';
+            await loadFlashcards();
+        } catch (err) {
+            console.error(err);
+            alert(`Error creating card: ${err.message}`);
+        } finally {
+            createCardButton.disabled = false;
         }
     }
 </script>
