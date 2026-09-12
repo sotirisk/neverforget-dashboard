@@ -304,7 +304,9 @@
                 question,
                 answer,
                 interval: 0,
-                ease_factor: 2.5
+                ease_factor: 2.5,
+                correct_count: 0,
+                incorrect_count: 0
             });
 
             if (error) throw error;
@@ -367,7 +369,9 @@ ${content}`;
                 question: card.question,
                 answer: card.answer,
                 interval: 0,
-                ease_factor: 2.5
+                ease_factor: 2.5,
+                correct_count: 0,
+                incorrect_count: 0
             }));
 
             const { error: dbError } = await supabaseClient.from('flashcards').insert(recordsToInsert);
@@ -389,7 +393,7 @@ ${content}`;
         }
     }
 
-    // Flashcard Review Logic (Robust loading compatible with existing Supabase schema)
+    // Flashcard Review Logic (Spaced Repetition database integration)
     async function loadFlashcards() {
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) {
@@ -401,7 +405,7 @@ ${content}`;
 
         const { data, error } = await supabaseClient
             .from('flashcards')
-            .select('id, question, answer')
+            .select('id, question, answer, interval, ease_factor, correct_count, incorrect_count, last_reviewed_at')
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -415,12 +419,17 @@ ${content}`;
             return;
         }
 
-        // Initialize local memory counters for spaced repetition stats safely
-        cards = data.map(card => ({
-            ...card,
-            correct_count: card.correct_count || 0,
-            incorrect_count: card.incorrect_count || 0
-        }));
+        // Spaced Repetition Priority Sorting (Ebbinghaus curve priority)
+        cards = data.sort((a, b) => {
+            const aIncorrect = a.incorrect_count || 0;
+            const bIncorrect = b.incorrect_count || 0;
+            if (bIncorrect !== aIncorrect) {
+                return bIncorrect - aIncorrect;
+            }
+            const aTime = a.last_reviewed_at ? new Date(a.last_reviewed_at).getTime() : 0;
+            const bTime = b.last_reviewed_at ? new Date(b.last_reviewed_at).getTime() : 0;
+            return aTime - bTime;
+        });
 
         currentIndex = 0;
         showingAnswer = false;
@@ -437,7 +446,7 @@ ${content}`;
 
         cardProgress.innerText = `Card ${currentIndex + 1} of ${cards.length}`;
         cardStats.style.display = 'inline-block';
-        cardStats.innerText = `✓ ${currentCard.correct_count} | ✗ ${currentCard.incorrect_count}`;
+        cardStats.innerText = `✓ ${currentCard.correct_count || 0} | ✗ ${currentCard.incorrect_count || 0}`;
 
         if (showingAnswer) {
             cardBox.innerText = currentCard.answer;
@@ -473,22 +482,47 @@ ${content}`;
         renderCard();
     }
 
-    function markGotIt() {
+    async function updateCardStats(isCorrect) {
         if (cards.length === 0) return;
-        cards[currentIndex].correct_count++;
+        const currentCard = cards[currentIndex];
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+        if (!supabaseKey) return;
+
+        initSupabase(supabaseKey);
+
+        const correctCount = (currentCard.correct_count || 0) + (isCorrect ? 1 : 0);
+        const incorrectCount = (currentCard.incorrect_count || 0) + (isCorrect ? 0 : 1);
+        const newInterval = isCorrect ? (currentCard.interval || 0) + 1 : 0;
+        const now = new Date().toISOString();
+
+        currentCard.correct_count = correctCount;
+        currentCard.incorrect_count = incorrectCount;
+        currentCard.interval = newInterval;
+        currentCard.last_reviewed_at = now;
+
+        try {
+            await supabaseClient
+                .from('flashcards')
+                .update({
+                    correct_count: correctCount,
+                    incorrect_count: incorrectCount,
+                    interval: newInterval,
+                    last_reviewed_at: now
+                })
+                .eq('id', currentCard.id);
+        } catch (err) {
+            console.error('Failed to update review stats in database:', err);
+        }
+
         nextCard();
     }
 
+    function markGotIt() {
+        updateCardStats(true);
+    }
+
     function markMissedThat() {
-        if (cards.length === 0) return;
-        cards[currentIndex].incorrect_count++;
-        // Move missed card towards the front of review queue (Ebbinghaus principle)
-        const missedCard = cards.splice(currentIndex, 1)[0];
-        cards.splice(Math.min(currentIndex + 2, cards.length), 0, missedCard);
-        showingAnswer = false;
-        document.getElementById('ai-response-box').style.display = 'none';
-        document.getElementById('create-card-btn').style.display = 'none';
-        renderCard();
+        updateCardStats(false);
     }
 
     async function askAIAboutCard() {
@@ -568,7 +602,9 @@ Learner Question: "${userQuery}"`;
                 question: lastAIQuestion,
                 answer: lastAIAnswer,
                 interval: 0,
-                ease_factor: 2.5
+                ease_factor: 2.5,
+                correct_count: 0,
+                incorrect_count: 0
             });
 
             if (error) throw error;
