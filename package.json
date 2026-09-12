@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "mkdir -p www && cp src/index.html www/index.html",
+    "build": "mkdir -p www && cp src/index.html www/index.html && cp src/index.html index.html",
     "sync": "npm run build && npx cap sync android"
   },
   "repository": {
