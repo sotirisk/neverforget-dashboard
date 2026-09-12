@@ -8,17 +8,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background-color: #f4f5f7; color: #333; }
-        .header { display: flex; justify-content: space-between; align-items: center; max-width: 600px; margin: 0 auto 20px auto; padding: 0 10px; }
+        .header { display: flex; justify-content: space-between; align-items: center; max-width: 600px; margin: 0 auto 20px auto; padding: 0 10px; flex-wrap: wrap; gap: 10px; }
         .header h1 { margin: 0; font-size: 24px; color: #1e293b; }
+        .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto 20px auto; box-sizing: border-box; }
-        textarea { width: 100%; height: 140px; margin-top: 10px; margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        input[type="file"], input[type="password"] { margin-bottom: 15px; width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { width: 100%; height: 120px; margin-top: 8px; margin-bottom: 12px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        input[type="file"], input[type="password"], input[type="text"] { margin-bottom: 15px; width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         button { background-color: #2563eb; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px; }
         button:disabled { background-color: #93c5fd; cursor: not-allowed; }
-        .btn-secondary { background-color: #475569; }
+        .btn-secondary { background-color: #475569; width: auto; padding: 8px 14px; font-size: 14px; }
         .btn-success { background-color: #16a34a; }
         .btn-warning { background-color: #ca8a04; }
         .btn-danger { background-color: #dc2626; }
+        .btn-info { background-color: #0284c7; width: auto; padding: 8px 14px; font-size: 14px; }
         #status { margin-top: 15px; font-weight: bold; word-break: break-word; }
         .config-group { margin-bottom: 15px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
         .config-group label { font-size: 13px; font-weight: bold; color: #475569; display: block; margin-bottom: 5px; }
@@ -44,10 +46,11 @@
         .feedback-controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .feedback-controls button { flex: 1; }
         .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e2e8f0; margin-bottom: 10px; }
-        
+        .stats-badge { font-size: 11px; background: #f1f5f9; color: #475569; padding: 3px 6px; border-radius: 4px; margin-left: 5px; }
+
         /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); padding-top: 40px; }
-        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 600px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 600px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); box-sizing: border-box; }
         .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
         .close:hover { color: black; }
     </style>
@@ -56,7 +59,26 @@
 
 <div class="header">
     <h1>NeverForget</h1>
-    <button onclick="toggleSettings()" style="width: auto; padding: 8px 16px;" class="btn-secondary">⚙️ Settings</button>
+    <div class="header-actions">
+        <button onclick="toggleManualCardForm()" class="btn-info">➕ Create card manually</button>
+        <button onclick="toggleInfoModal()" class="btn-info" style="background-color: #6366f1;">💡 Hint / Info</button>
+        <button onclick="toggleSettings()" class="btn-secondary">⚙️ Settings</button>
+    </div>
+</div>
+
+<!-- Manual Card Creation Section (Initially Hidden) -->
+<div id="manualCardSection" class="card" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1;">
+    <h2>Create Card Manually</h2>
+    <label for="manualQuestion">Question:</label>
+    <textarea id="manualQuestion" placeholder="Enter flashcard question..."></textarea>
+    
+    <label for="manualAnswer">Answer:</label>
+    <textarea id="manualAnswer" placeholder="Enter flashcard answer..."></textarea>
+    
+    <div style="display: flex; gap: 10px;">
+        <button onclick="saveManualCard()" class="btn-success">Save Card</button>
+        <button onclick="toggleManualCardForm()" class="btn-secondary" style="width: auto;">Cancel</button>
+    </div>
 </div>
 
 <!-- Review Interface Card (Default View) -->
@@ -64,8 +86,11 @@
     <h2>Flashcard Review</h2>
     
     <div id="reviewSection" style="margin-top: 20px;">
-        <span id="cardProgress" class="badge">Card 0 of 0</span>
-        <span id="cardSide" class="badge" style="background: #dbeafe; color: #1e40af;">Question</span>
+        <div>
+            <span id="cardProgress" class="badge">Card 0 of 0</span>
+            <span id="cardSide" class="badge" style="background: #dbeafe; color: #1e40af;">Question</span>
+            <span id="cardStats" class="stats-badge" style="display: none;"></span>
+        </div>
         
         <div id="cardBox" class="flashcard-display" onclick="flipCard()">
             Loading cards...
@@ -77,8 +102,8 @@
         </div>
 
         <div class="feedback-controls">
-            <button class="btn-success" onclick="markGotIt()">Got It</button>
-            <button class="btn-warning" onclick="markMissedThat()">Missed That</button>
+            <button class="btn-success" onclick="markGotIt()">Got It 👍</button>
+            <button class="btn-warning" onclick="markMissedThat()">Missed That 🔄</button>
         </div>
 
         <button
@@ -96,7 +121,7 @@
                     type="text"
                     id="ai-question-input"
                     placeholder="Ask about this card (e.g., What is scheme?)..."
-                    style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                    style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 0;"
                 />
                 <button
                     id="ask-ai-btn"
@@ -119,6 +144,23 @@
                 Create Card
             </button>
         </div>
+    </div>
+</div>
+
+<!-- Spaced Repetition Info Modal (Hint) -->
+<div id="infoModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="toggleInfoModal()">&times;</span>
+        <h2>💡 Spaced Repetition & Memory Timings</h2>
+        <p>Card timings are essential because human memory loses information following an exponential decay curve—a concept known as the <strong>Ebbinghaus Forgetting Curve</strong>.</p>
+        <p>When you learn a new card, your recall probability drops rapidly within the first 24 to 48 hours. Spaced repetition algorithms (such as SuperMemo SM-2 or FSRS) use precise interval timing to schedule reviews at the optimal moment: right when you are about to forget the answer.</p>
+        <ul>
+            <li><strong>Maximizes Long-Term Retention:</strong> Reviewing a card precisely when memory strength decays forces the brain to perform active retrieval, which reinforces neural pathways and significantly increases memory stability.</li>
+            <li><strong>Prevents Over-Studying:</strong> Without interval timing, you waste time reviewing cards you already know well. Timings push mastered cards further into the future (e.g., from 3 days to 10 days, then 30 days).</li>
+            <li><strong>Prevents Under-Studying:</strong> Cards you struggle with are scheduled at shorter intervals (e.g., 10 minutes, 1 day) to catch fading recall before the memory disappears completely.</li>
+            <li><strong>Optimizes Study Efficiency:</strong> By scheduling reviews according to individual memory decay rates, you achieve up to 90%+ long-term retention while spending the absolute minimum time studying each day.</li>
+        </ul>
+        <button onclick="toggleInfoModal()" class="btn-secondary" style="width: 100%; margin-top: 15px;">Got It</button>
     </div>
 </div>
 
@@ -187,7 +229,6 @@
             console.log('No local config.json file found.');
         }
 
-        // Auto-load cards on startup if Supabase key is present
         const currentSupabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (currentSupabaseKey) {
             initSupabase(currentSupabaseKey);
@@ -208,12 +249,27 @@
         modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
     }
 
-    // Close modal when clicking outside of it
-    window.onclick = function(event) {
-        const modal = document.getElementById('settingsModal');
-        if (event.target === modal) {
-            modal.style.display = 'none';
+    function toggleInfoModal() {
+        const modal = document.getElementById('infoModal');
+        modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function toggleManualCardForm() {
+        const section = document.getElementById('manualCardSection');
+        section.style.display = section.style.display === 'block' ? 'none' : 'block';
+        if (section.style.display === 'block') {
+            document.getElementById('manualQuestion').value = '';
+            document.getElementById('manualAnswer').value = '';
+            document.getElementById('manualQuestion').focus();
         }
+    }
+
+    // Close modals when clicking outside
+    window.onclick = function(event) {
+        const settingsModal = document.getElementById('settingsModal');
+        const infoModal = document.getElementById('infoModal');
+        if (event.target === settingsModal) settingsModal.style.display = 'none';
+        if (event.target === infoModal) infoModal.style.display = 'none';
     }
 
     function handleFileSelect(event) {
@@ -224,6 +280,45 @@
             document.getElementById('textInput').value = e.target.result;
         };
         reader.readAsText(file);
+    }
+
+    async function saveManualCard() {
+        const question = document.getElementById('manualQuestion').value.trim();
+        const answer = document.getElementById('manualAnswer').value.trim();
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+
+        if (!question || !answer) {
+            alert('Please provide both question and answer.');
+            return;
+        }
+        if (!supabaseKey) {
+            alert('Please provide your Supabase Anon Key in Settings first.');
+            return;
+        }
+
+        initSupabase(supabaseKey);
+
+        try {
+            const { error } = await supabaseClient.from('flashcards').insert({
+                user_id: crypto.randomUUID(),
+                question,
+                answer,
+                interval: 0,
+                ease_factor: 2.5,
+                correct_count: 0,
+                incorrect_count: 0,
+                last_reviewed_at: null
+            });
+
+            if (error) throw error;
+
+            alert('Manual card created successfully!');
+            toggleManualCardForm();
+            loadFlashcards();
+        } catch (err) {
+            console.error(err);
+            alert(`Error saving card: ${err.message}`);
+        }
     }
 
     // Ingestion Logic
@@ -275,7 +370,10 @@ ${content}`;
                 question: card.question,
                 answer: card.answer,
                 interval: 0,
-                ease_factor: 2.5
+                ease_factor: 2.5,
+                correct_count: 0,
+                incorrect_count: 0,
+                last_reviewed_at: null
             }));
 
             const { error: dbError } = await supabaseClient.from('flashcards').insert(recordsToInsert);
@@ -285,7 +383,6 @@ ${content}`;
             statusDiv.innerText = `Success! Created and stored ${flashcards.length} flashcards in Supabase.`;
             document.getElementById('textInput').value = '';
             
-            // Close settings and reload cards
             toggleSettings();
             loadFlashcards();
 
@@ -298,7 +395,7 @@ ${content}`;
         }
     }
 
-    // Flashcard Review Logic
+    // Flashcard Review Logic (Smart Spaced Repetition sorting)
     async function loadFlashcards() {
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) {
@@ -310,7 +407,7 @@ ${content}`;
 
         const { data, error } = await supabaseClient
             .from('flashcards')
-            .select('id, question, answer')
+            .select('id, question, answer, interval, ease_factor, correct_count, incorrect_count, last_reviewed_at')
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -319,15 +416,26 @@ ${content}`;
         }
 
         if (!data || data.length === 0) {
-            document.getElementById('cardBox').innerText = 'No flashcards found in database. Add notes in Settings!';
+            document.getElementById('cardBox').innerText = 'No flashcards found in database. Add notes or create cards manually!';
             cards = [];
             return;
         }
 
-        cards = data;
+        // Spaced Repetition Priority Sorting:
+        // Prioritize cards with more incorrect answers or older review timestamps (Ebbinghaus curve priority)
+        cards = data.sort((a, b) => {
+            const aIncorrect = a.incorrect_count || 0;
+            const bIncorrect = b.incorrect_count || 0;
+            if (bIncorrect !== aIncorrect) {
+                return bIncorrect - aIncorrect; // Higher incorrect count first
+            }
+            const aTime = a.last_reviewed_at ? new Date(a.last_reviewed_at).getTime() : 0;
+            const bTime = b.last_reviewed_at ? new Date(b.last_reviewed_at).getTime() : 0;
+            return aTime - bTime; // Oldest reviewed first
+        });
+
         currentIndex = 0;
         showingAnswer = false;
-        
         renderCard();
     }
 
@@ -337,12 +445,15 @@ ${content}`;
         const cardBox = document.getElementById('cardBox');
         const cardSide = document.getElementById('cardSide');
         const cardProgress = document.getElementById('cardProgress');
+        const cardStats = document.getElementById('cardStats');
 
         cardProgress.innerText = `Card ${currentIndex + 1} of ${cards.length}`;
+        cardStats.style.display = 'inline-block';
+        cardStats.innerText = `✓ ${currentCard.correct_count || 0} | ✗ ${currentCard.incorrect_count || 0}`;
 
         if (showingAnswer) {
             cardBox.innerText = currentCard.answer;
-            cardBox.style.backgroundColor = '#f0fdf4'; // Subtle green tint for answers
+            cardBox.style.backgroundColor = '#f0fdf4';
             cardSide.innerText = 'Answer';
             cardSide.style.background = '#dcfce7';
             cardSide.style.color = '#166534';
@@ -374,12 +485,48 @@ ${content}`;
         renderCard();
     }
 
-    function markGotIt() {
+    async function updateCardStats(isCorrect) {
+        if (cards.length === 0) return;
+        const currentCard = cards[currentIndex];
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+        if (!supabaseKey) return;
+
+        initSupabase(supabaseKey);
+
+        const correctCount = (currentCard.correct_count || 0) + (isCorrect ? 1 : 0);
+        const incorrectCount = (currentCard.incorrect_count || 0) + (isCorrect ? 0 : 1);
+        const newInterval = isCorrect ? (currentCard.interval || 0) + 1 : 0;
+        const now = new Date().toISOString();
+
+        // Update local state
+        currentCard.correct_count = correctCount;
+        currentCard.incorrect_count = incorrectCount;
+        currentCard.interval = newInterval;
+        currentCard.last_reviewed_at = now;
+
+        try {
+            await supabaseClient
+                .from('flashcards')
+                .update({
+                    correct_count: correctCount,
+                    incorrect_count: incorrectCount,
+                    interval: newInterval,
+                    last_reviewed_at: now
+                })
+                .eq('id', currentCard.id);
+        } catch (err) {
+            console.error('Failed to update review stats:', err);
+        }
+
         nextCard();
     }
 
+    function markGotIt() {
+        updateCardStats(true);
+    }
+
     function markMissedThat() {
-        nextCard();
+        updateCardStats(false);
     }
 
     async function askAIAboutCard() {
@@ -459,7 +606,10 @@ Learner Question: "${userQuery}"`;
                 question: lastAIQuestion,
                 answer: lastAIAnswer,
                 interval: 0,
-                ease_factor: 2.5
+                ease_factor: 2.5,
+                correct_count: 0,
+                incorrect_count: 0,
+                last_reviewed_at: null
             });
 
             if (error) throw error;
@@ -505,7 +655,7 @@ Learner Question: "${userQuery}"`;
             document.getElementById('create-card-btn').style.display = 'none';
 
             if (cards.length === 0) {
-                document.getElementById('cardBox').innerText = 'No flashcards remain. Add notes in Settings!';
+                document.getElementById('cardBox').innerText = 'No flashcards remain. Add notes or create cards manually!';
                 return;
             }
 
