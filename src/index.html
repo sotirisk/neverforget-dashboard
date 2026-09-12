@@ -7,13 +7,18 @@
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; margin: 40px; background-color: #f4f5f7; color: #333; }
-        .card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto 20px auto; }
+        body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background-color: #f4f5f7; color: #333; }
+        .header { display: flex; justify-content: space-between; align-items: center; max-width: 600px; margin: 0 auto 20px auto; padding: 0 10px; }
+        .header h1 { margin: 0; font-size: 24px; color: #1e293b; }
+        .card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto 20px auto; box-sizing: border-box; }
         textarea { width: 100%; height: 140px; margin-top: 10px; margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         input[type="file"], input[type="password"] { margin-bottom: 15px; width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         button { background-color: #2563eb; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px; }
         button:disabled { background-color: #93c5fd; cursor: not-allowed; }
-        .btn-secondary { background-color: #475569; margin-top: 10px; }
+        .btn-secondary { background-color: #475569; }
+        .btn-success { background-color: #16a34a; }
+        .btn-warning { background-color: #ca8a04; }
+        .btn-danger { background-color: #dc2626; }
         #status { margin-top: 15px; font-weight: bold; word-break: break-word; }
         .config-group { margin-bottom: 15px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
         .config-group label { font-size: 13px; font-weight: bold; color: #475569; display: block; margin-bottom: 5px; }
@@ -34,59 +39,53 @@
             user-select: none;
             margin-bottom: 15px;
         }
-        .controls { display: flex; gap: 10px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .controls button { flex: 1; }
+        .feedback-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        .feedback-controls button { flex: 1; }
         .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e2e8f0; margin-bottom: 10px; }
+        
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); padding-top: 40px; }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 600px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: black; }
     </style>
 </head>
 <body>
 
-<!-- Setup & Ingestion Card -->
-<div class="card">
-    <h2>NeverForget - Content Ingestion</h2>
-    
-    <div class="config-group">
-        <label for="apiKeyInput">Gemini API Key:</label>
-        <input type="password" id="apiKeyInput" placeholder="Paste your Gemini API Key (AIzaSy...)" />
-        
-        <label for="supabaseKeyInput">Supabase Anon Key:</label>
-        <input type="password" id="supabaseKeyInput" placeholder="Paste your Supabase Anon Key" />
-    </div>
-
-    <p>Upload a text file (.txt, .md) or paste your notes below:</p>
-    
-    <input type="file" id="fileInput" accept=".txt,.md">
-    <p style="text-align: center; color: #666; margin: 5px 0;">or</p>
-    
-    <textarea id="textInput" placeholder="Paste your notes here..."></textarea>
-    
-    <button id="processBtn" onclick="processContent()">Process & Generate Flashcards</button>
-    <div id="status"></div>
+<div class="header">
+    <h1>NeverForget</h1>
+    <button onclick="toggleSettings()" style="width: auto; padding: 8px 16px;" class="btn-secondary">⚙️ Settings</button>
 </div>
 
-<!-- Review Interface Card -->
+<!-- Review Interface Card (Default View) -->
 <div class="card">
     <h2>Flashcard Review</h2>
-    <button class="btn-secondary" onclick="loadFlashcards()">Load Cards from Supabase</button>
     
-    <div id="reviewSection" style="display: none; margin-top: 20px;">
+    <div id="reviewSection" style="margin-top: 20px;">
         <span id="cardProgress" class="badge">Card 0 of 0</span>
         <span id="cardSide" class="badge" style="background: #dbeafe; color: #1e40af;">Question</span>
         
         <div id="cardBox" class="flashcard-display" onclick="flipCard()">
-            Click "Load Cards" to begin.
+            Loading cards...
         </div>
 
         <div class="controls">
-            <button onclick="prevCard()" class="btn-secondary">Previous</button>
             <button onclick="flipCard()">Flip</button>
-            <button onclick="nextCard()">Next</button>
+            <button onclick="nextCard()" class="btn-secondary">Next</button>
+        </div>
+
+        <div class="feedback-controls">
+            <button class="btn-success" onclick="markGotIt()">Got It</button>
+            <button class="btn-warning" onclick="markMissedThat()">Missed That</button>
         </div>
 
         <button
             id="delete-card-btn"
             onclick="deleteCurrentCard()"
-            style="margin-top: 10px; background-color: #dc2626;"
+            class="btn-danger"
+            style="margin-top: 5px;"
         >
             Delete Current Card
         </button>
@@ -102,7 +101,7 @@
                 <button
                     id="ask-ai-btn"
                     onclick="askAIAboutCard()"
-                    style="padding: 8px 16px; background-color: #10a37f; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                    style="width: auto; padding: 8px 16px; background-color: #10a37f; color: white; border: none; border-radius: 4px; cursor: pointer;"
                 >
                     Ask AI
                 </button>
@@ -123,6 +122,32 @@
     </div>
 </div>
 
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="toggleSettings()">&times;</span>
+        <h2>Settings & Content Ingestion</h2>
+        
+        <div class="config-group">
+            <label for="apiKeyInput">Gemini API Key:</label>
+            <input type="password" id="apiKeyInput" placeholder="Paste your Gemini API Key (AIzaSy...)" />
+            
+            <label for="supabaseKeyInput">Supabase Anon Key:</label>
+            <input type="password" id="supabaseKeyInput" placeholder="Paste your Supabase Anon Key" />
+        </div>
+
+        <p>Upload a text file (.txt, .md) or paste your notes below:</p>
+        
+        <input type="file" id="fileInput" accept=".txt,.md" onchange="handleFileSelect(event)">
+        <p style="text-align: center; color: #666; margin: 5px 0;">or</p>
+        
+        <textarea id="textInput" placeholder="Paste your notes here..."></textarea>
+        
+        <button id="processBtn" onclick="processContent()">Process & Generate Flashcards</button>
+        <div id="status"></div>
+    </div>
+</div>
+
 <script>
     const SUPABASE_URL = 'https://drfsdxongvpgvdcoibxd.supabase.co';
     let supabaseClient = null;
@@ -133,7 +158,7 @@
     let lastAIQuestion = '';
     let lastAIAnswer = '';
 
-    // Load credentials on startup
+    // Load credentials and cards on startup
     document.addEventListener('DOMContentLoaded', async () => {
         const savedGeminiKey = localStorage.getItem('GEMINI_API_KEY');
         if (savedGeminiKey) document.getElementById('apiKeyInput').value = savedGeminiKey;
@@ -148,12 +173,12 @@
             const configResponse = await fetch('config.json');
             if (configResponse.ok) {
                 const config = await configResponse.json();
-                if (config.SUPABASE_ANON_KEY) {
+                if (config.SUPABASE_ANON_KEY && !savedSupabaseKey) {
                     document.getElementById('supabaseKeyInput').value = config.SUPABASE_ANON_KEY;
                     localStorage.setItem('SUPABASE_ANON_KEY', config.SUPABASE_ANON_KEY);
                     initSupabase(config.SUPABASE_ANON_KEY);
                 }
-                if (config.GEMINI_API_KEY) {
+                if (config.GEMINI_API_KEY && !savedGeminiKey) {
                     document.getElementById('apiKeyInput').value = config.GEMINI_API_KEY;
                     localStorage.setItem('GEMINI_API_KEY', config.GEMINI_API_KEY);
                 }
@@ -161,12 +186,44 @@
         } catch (e) {
             console.log('No local config.json file found.');
         }
+
+        // Auto-load cards on startup if Supabase key is present
+        const currentSupabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+        if (currentSupabaseKey) {
+            initSupabase(currentSupabaseKey);
+            loadFlashcards();
+        } else {
+            document.getElementById('cardBox').innerText = 'Please configure your Supabase Anon Key in Settings.';
+        }
     });
 
     function initSupabase(key) {
         if (key) {
             supabaseClient = supabase.createClient(SUPABASE_URL, key);
         }
+    }
+
+    function toggleSettings() {
+        const modal = document.getElementById('settingsModal');
+        modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Close modal when clicking outside of it
+    window.onclick = function(event) {
+        const modal = document.getElementById('settingsModal');
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('textInput').value = e.target.result;
+        };
+        reader.readAsText(file);
     }
 
     // Ingestion Logic
@@ -228,7 +285,8 @@ ${content}`;
             statusDiv.innerText = `Success! Created and stored ${flashcards.length} flashcards in Supabase.`;
             document.getElementById('textInput').value = '';
             
-            // Reload viewer stack automatically
+            // Close settings and reload cards
+            toggleSettings();
             loadFlashcards();
 
         } catch (err) {
@@ -244,7 +302,7 @@ ${content}`;
     async function loadFlashcards() {
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) {
-            alert('Please provide your Supabase Anon Key first.');
+            document.getElementById('cardBox').innerText = 'Please configure your Supabase Anon Key in Settings.';
             return;
         }
         
@@ -256,12 +314,13 @@ ${content}`;
             .order('created_at', { ascending: false });
 
         if (error) {
-            alert('Error loading cards: ' + error.message);
+            document.getElementById('cardBox').innerText = 'Error loading cards: ' + error.message;
             return;
         }
 
         if (!data || data.length === 0) {
-            alert('No flashcards found in database.');
+            document.getElementById('cardBox').innerText = 'No flashcards found in database. Add notes in Settings!';
+            cards = [];
             return;
         }
 
@@ -269,7 +328,6 @@ ${content}`;
         currentIndex = 0;
         showingAnswer = false;
         
-        document.getElementById('reviewSection').style.display = 'block';
         renderCard();
     }
 
@@ -307,18 +365,21 @@ ${content}`;
         if (cards.length === 0) return;
         if (currentIndex < cards.length - 1) {
             currentIndex++;
-            showingAnswer = false;
-            renderCard();
+        } else {
+            currentIndex = 0;
         }
+        showingAnswer = false;
+        document.getElementById('ai-response-box').style.display = 'none';
+        document.getElementById('create-card-btn').style.display = 'none';
+        renderCard();
     }
 
-    function prevCard() {
-        if (cards.length === 0) return;
-        if (currentIndex > 0) {
-            currentIndex--;
-            showingAnswer = false;
-            renderCard();
-        }
+    function markGotIt() {
+        nextCard();
+    }
+
+    function markMissedThat() {
+        nextCard();
     }
 
     async function askAIAboutCard() {
@@ -385,7 +446,7 @@ Learner Question: "${userQuery}"`;
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
 
         if (!lastAIQuestion || !lastAIAnswer || !supabaseKey) {
-            alert('Please provide a Supabase Anon Key and ask a question first.');
+            alert('Please provide a Supabase Anon Key in Settings and ask a question first.');
             return;
         }
 
@@ -422,7 +483,7 @@ Learner Question: "${userQuery}"`;
         const deleteButton = document.getElementById('delete-card-btn');
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) {
-            alert('Please provide your Supabase Anon Key first.');
+            alert('Please provide your Supabase Anon Key in Settings first.');
             return;
         }
 
@@ -444,8 +505,7 @@ Learner Question: "${userQuery}"`;
             document.getElementById('create-card-btn').style.display = 'none';
 
             if (cards.length === 0) {
-                document.getElementById('reviewSection').style.display = 'none';
-                alert('Flashcard deleted. No cards remain.');
+                document.getElementById('cardBox').innerText = 'No flashcards remain. Add notes in Settings!';
                 return;
             }
 
