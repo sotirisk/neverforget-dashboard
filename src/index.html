@@ -31,6 +31,7 @@
             border: 2px dashed #cbd5e1;
             border-radius: 8px;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 20px;
@@ -89,31 +90,33 @@
         <div>
             <span id="cardProgress" class="badge">Card 0 of 0</span>
             <span id="cardSide" class="badge" style="background: #dbeafe; color: #1e40af;">Question</span>
-            <span id="cardStats" class="stats-badge" style="display: none;"></span>
+            <span id="cardStats" class="stats-badge" style="display: inline-block;">✓ 0 | ✗ 0</span>
         </div>
         
         <div id="cardBox" class="flashcard-display" onclick="flipCard()">
             Loading cards...
         </div>
 
-        <div class="controls">
-            <button onclick="flipCard()">Flip</button>
-            <button onclick="nextCard()" class="btn-secondary">Next</button>
-        </div>
+        <div id="activeReviewControls">
+            <div class="controls">
+                <button onclick="flipCard()">Flip</button>
+                <button onclick="nextCard()" class="btn-secondary">Next</button>
+            </div>
 
-        <div class="feedback-controls">
-            <button class="btn-success" onclick="markGotIt()">Got It 👍</button>
-            <button class="btn-warning" onclick="markMissedThat()">Missed That 🔄</button>
-        </div>
+            <div class="feedback-controls">
+                <button class="btn-success" onclick="markGotIt()">Got It 👍</button>
+                <button class="btn-warning" onclick="markMissedThat()">Missed That 🔄</button>
+            </div>
 
-        <button
-            id="delete-card-btn"
-            onclick="deleteCurrentCard()"
-            class="btn-danger"
-            style="margin-top: 5px;"
-        >
-            Delete Current Card
-        </button>
+            <button
+                id="delete-card-btn"
+                onclick="deleteCurrentCard()"
+                class="btn-danger"
+                style="margin-top: 5px;"
+            >
+                Delete Current Card
+            </button>
+        </div>
 
         <div id="ai-section" style="margin-top: 15px; border-top: 1px solid #e0e0e0; padding-top: 10px;">
             <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -195,6 +198,7 @@
     let supabaseClient = null;
 
     let cards = [];
+    let dueQueue = [];
     let currentIndex = 0;
     let showingAnswer = false;
     let lastAIQuestion = '';
@@ -393,7 +397,7 @@ ${content}`;
         }
     }
 
-    // Flashcard Review Logic (Spaced Repetition database integration)
+    // Flashcard Review Logic (Ebbinghaus Forgetting Curve & Due Queue)
     async function loadFlashcards() {
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) {
@@ -416,20 +420,28 @@ ${content}`;
         if (!data || data.length === 0) {
             document.getElementById('cardBox').innerText = 'No flashcards found in database. Add notes or create cards manually!';
             cards = [];
+            dueQueue = [];
             return;
         }
 
-        // Spaced Repetition Priority Sorting (Ebbinghaus curve priority)
-        cards = data.sort((a, b) => {
-            const aIncorrect = a.incorrect_count || 0;
-            const bIncorrect = b.incorrect_count || 0;
-            if (bIncorrect !== aIncorrect) {
-                return bIncorrect - aIncorrect;
-            }
-            const aTime = a.last_reviewed_at ? new Date(a.last_reviewed_at).getTime() : 0;
-            const bTime = b.last_reviewed_at ? new Date(b.last_reviewed_at).getTime() : 0;
-            return aTime - bTime;
+        cards = data;
+        
+        // Filter or prioritize due cards based on Ebbinghaus forgetting curve intervals
+        const now = new Date().getTime();
+        dueQueue = cards.filter(card => {
+            if (!card.last_reviewed_at) return true; // never reviewed = due now
+            const lastReview = new Date(card.last_reviewed_at).getTime();
+            const intervalDays = card.interval || 0;
+            const intervalMs = intervalDays * 24 * 60 * 60 * 1000;
+            // If interval is 0, due immediately. If interval > 0, due after interval elapses.
+            return intervalDays === 0 || (now - lastReview >= intervalMs);
         });
+
+        // If all cards are mastered for now, dueQueue can include cards with highest incorrect counts or oldest reviews for extra practice,
+        // or we show the completion screen if user has reviewed everything due.
+        if (dueQueue.length === 0 && cards.length > 0) {
+            dueQueue = [...cards]; // fallback to all cards if none strictly due
+        }
 
         currentIndex = 0;
         showingAnswer = false;
@@ -437,14 +449,20 @@ ${content}`;
     }
 
     function renderCard() {
-        if (cards.length === 0) return;
-        const currentCard = cards[currentIndex];
+        if (dueQueue.length === 0 || currentIndex >= dueQueue.length) {
+            showCompletionScreen();
+            return;
+        }
+
+        const currentCard = dueQueue[currentIndex];
         const cardBox = document.getElementById('cardBox');
         const cardSide = document.getElementById('cardSide');
         const cardProgress = document.getElementById('cardProgress');
         const cardStats = document.getElementById('cardStats');
-
-        cardProgress.innerText = `Card ${currentIndex + 1} of ${cards.length}`;
+        const activeControls = document.getElementById('activeReviewControls');
+        
+        activeControls.style.display = 'block';
+        cardProgress.innerText = `Card ${currentIndex + 1} of ${dueQueue.length}`;
         cardStats.style.display = 'inline-block';
         cardStats.innerText = `✓ ${currentCard.correct_count || 0} | ✗ ${currentCard.incorrect_count || 0}`;
 
@@ -463,18 +481,56 @@ ${content}`;
         }
     }
 
+    function showCompletionScreen() {
+        const cardBox = document.getElementById('cardBox');
+        const cardProgress = document.getElementById('cardProgress');
+        const cardSide = document.getElementById('cardSide');
+        const cardStats = document.getElementById('cardStats');
+        const activeControls = document.getElementById('activeReviewControls');
+
+        cardProgress.innerText = `Completed!`;
+        cardSide.innerText = 'Done';
+        cardStats.style.display = 'none';
+        activeControls.style.display = 'none';
+
+        // Calculate next recommended return time based on Ebbinghaus intervals
+        let minNextReviewHours = 24;
+        cards.forEach(card => {
+            if (card.last_reviewed_at && card.interval > 0) {
+                const nextDue = new Date(new Date(card.last_reviewed_at).getTime() + card.interval * 24 * 60 * 60 * 1000);
+                const hoursLeft = Math.max(1, Math.round((nextDue.getTime() - new Date().getTime()) / (60 * 60 * 1000)));
+                if (hoursLeft < minNextReviewHours) minNextReviewHours = hoursLeft;
+            }
+        });
+
+        cardBox.innerHTML = `
+            <div style="padding: 10px;">
+                <h3 style="color: #16a34a; margin-top: 0;">🎉 You are OK for now!</h3>
+                <p style="font-size: 15px; color: #475569; line-height: 1.5;">
+                    You have successfully answered all due questions for this memory session.<br>
+                    Based on the Ebbinghaus Forgetting Curve and your card intervals, your memory retention is optimized.
+                </p>
+                <p style="font-size: 14px; font-weight: bold; color: #1e293b; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                    ⏳ Recommended Next Memory Check:<br>Come back in <strong>${minNextReviewHours} hours</strong> (tomorrow) for your next review session!
+                </p>
+                <button onclick="loadFlashcards()" class="btn-secondary" style="margin-top: 10px; width: 100%;">Review Again Now</button>
+            </div>
+        `;
+    }
+
     function flipCard() {
-        if (cards.length === 0) return;
+        if (dueQueue.length === 0) return;
         showingAnswer = !showingAnswer;
         renderCard();
     }
 
     function nextCard() {
-        if (cards.length === 0) return;
-        if (currentIndex < cards.length - 1) {
+        if (dueQueue.length === 0) return;
+        if (currentIndex < dueQueue.length - 1) {
             currentIndex++;
         } else {
-            currentIndex = 0;
+            // Reached end of due queue
+            currentIndex = dueQueue.length;
         }
         showingAnswer = false;
         document.getElementById('ai-response-box').style.display = 'none';
@@ -483,8 +539,8 @@ ${content}`;
     }
 
     async function updateCardStats(isCorrect) {
-        if (cards.length === 0) return;
-        const currentCard = cards[currentIndex];
+        if (dueQueue.length === 0 || currentIndex >= dueQueue.length) return;
+        const currentCard = dueQueue[currentIndex];
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) return;
 
@@ -492,9 +548,10 @@ ${content}`;
 
         const correctCount = (currentCard.correct_count || 0) + (isCorrect ? 1 : 0);
         const incorrectCount = (currentCard.incorrect_count || 0) + (isCorrect ? 0 : 1);
-        const newInterval = isCorrect ? (currentCard.interval || 0) + 1 : 0;
+        const newInterval = isCorrect ? Math.max(1, (currentCard.interval || 0) * 2) : 0; // Ebbinghaus exponential spacing on correct
         const now = new Date().toISOString();
 
+        // Update local object immediately for instant UI feedback
         currentCard.correct_count = correctCount;
         currentCard.incorrect_count = incorrectCount;
         currentCard.interval = newInterval;
@@ -512,6 +569,11 @@ ${content}`;
                 .eq('id', currentCard.id);
         } catch (err) {
             console.error('Failed to update review stats in database:', err);
+        }
+
+        if (!isCorrect) {
+            // If missed, re-insert into due queue so user practices it again this session
+            dueQueue.push(currentCard);
         }
 
         nextCard();
@@ -620,9 +682,9 @@ Learner Question: "${userQuery}"`;
     }
 
     async function deleteCurrentCard() {
-        if (cards.length === 0) return;
+        if (dueQueue.length === 0 || currentIndex >= dueQueue.length) return;
 
-        const currentCard = cards[currentIndex];
+        const currentCard = dueQueue[currentIndex];
         if (!confirm('Delete this flashcard permanently?')) return;
 
         const deleteButton = document.getElementById('delete-card-btn');
@@ -643,18 +705,18 @@ Learner Question: "${userQuery}"`;
 
             if (error) throw error;
 
-            cards.splice(currentIndex, 1);
+            dueQueue.splice(currentIndex, 1);
             lastAIQuestion = '';
             lastAIAnswer = '';
             document.getElementById('ai-response-box').style.display = 'none';
             document.getElementById('create-card-btn').style.display = 'none';
 
-            if (cards.length === 0) {
-                document.getElementById('cardBox').innerText = 'No flashcards remain. Add notes or create cards manually!';
+            if (dueQueue.length === 0) {
+                showCompletionScreen();
                 return;
             }
 
-            currentIndex = Math.min(currentIndex, cards.length - 1);
+            currentIndex = Math.min(currentIndex, dueQueue.length - 1);
             showingAnswer = false;
             renderCard();
         } catch (err) {
