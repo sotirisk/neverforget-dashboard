@@ -642,13 +642,13 @@ ${content}`;
             return intervalDays === 0 || (now - lastReview >= intervalMs);
         });
 
-        // If all cards are mastered for now, dueQueue can include all cards sorted by oldest review time first (or never reviewed)
+        // If all cards are up to date (no cards strictly due right now), show completion screen immediately on login
         if (dueQueue.length === 0 && cards.length > 0) {
-            dueQueue = [...cards].sort((a, b) => {
-                if (!a.last_reviewed_at) return -1;
-                if (!b.last_reviewed_at) return 1;
-                return new Date(a.last_reviewed_at) - new Date(b.last_reviewed_at);
-            });
+            cards = data;
+            currentIndex = 0;
+            showingAnswer = false;
+            showCompletionScreen();
+            return;
         }
 
         currentIndex = 0;
