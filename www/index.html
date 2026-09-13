@@ -266,7 +266,13 @@
     let lastAIQuestion = '';
     let lastAIAnswer = '';
 
-    let currentUser = null;
+    // Check URL hash immediately on script load (before DOMContentLoaded) to clear access_token and set session
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+        const hash = window.location.hash;
+        window.history.replaceState(null, null, window.location.pathname);
+        // Store in localStorage as fallback so session persists cleanly
+        localStorage.setItem('SUPABASE_OAUTH_HASH', hash);
+    }
 
     // Load credentials and cards on startup
     document.addEventListener('DOMContentLoaded', async () => {
@@ -301,18 +307,35 @@
         if (currentSupabaseKey) {
             initSupabase(currentSupabaseKey);
             
-            // Check active session or handle hash redirect
+            // If we captured an oauth hash earlier, let Supabase set the session from it
+            const savedHash = localStorage.getItem('SUPABASE_OAUTH_HASH');
+            if (savedHash) {
+                localStorage.removeItem('SUPABASE_OAUTH_HASH');
+                try {
+                    // Extract access_token and refresh_token from hash
+                    const params = new URLSearchParams(savedHash.replace(/^#/, ''));
+                    const accessToken = params.get('access_token');
+                    const refreshToken = params.get('refresh_token');
+                    if (accessToken && refreshToken) {
+                        await supabaseClient.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken
+                        });
+                    }
+                } catch (err) {
+                    console.error('Error setting session from hash:', err);
+                }
+            }
+
+            // Check active session
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session && session.user) {
                 currentUser = session.user;
                 updateAuthUI();
             }
 
-            // Listen to auth state changes (Supabase automatically processes the URL hash token here)
+            // Listen to auth state changes
             supabaseClient.auth.onAuthStateChange((event, session) => {
-                if (window.location.hash && window.location.hash.includes('access_token')) {
-                    window.history.replaceState(null, null, window.location.pathname);
-                }
                 currentUser = session ? session.user : null;
                 updateAuthUI();
                 loadFlashcards();
