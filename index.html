@@ -117,7 +117,6 @@
         <div id="activeReviewControls">
             <div class="controls">
                 <button onclick="flipCard()">Flip</button>
-                <button onclick="nextCard()" class="btn-secondary">Next</button>
             </div>
 
             <div class="feedback-controls">
@@ -709,7 +708,7 @@ ${content}`;
     }
 
     // Flashcard Review Logic (Ebbinghaus Forgetting Curve & Due Queue)
-    async function loadFlashcards() {
+    async function loadFlashcards(forceAll = false) {
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) {
             document.getElementById('cardBox').innerText = 'Please configure your Supabase Anon Key in Settings.';
@@ -746,24 +745,27 @@ ${content}`;
 
         cards = data;
         
-        // Filter or prioritize due cards based on Ebbinghaus forgetting curve intervals (Hours: 1h -> 6h -> 12h -> 24h -> 48h+ days)
-        const now = new Date().getTime();
-        dueQueue = cards.filter(card => {
-            if (!card.last_reviewed_at) return true; // never reviewed = due now
-            const lastReview = new Date(card.last_reviewed_at).getTime();
-            const intervalHours = card.interval_hours || 0;
-            const intervalMs = intervalHours * 60 * 60 * 1000;
-            const isDue = intervalHours === 0 || (now - lastReview >= intervalMs);
-            return isDue;
-        });
+        if (forceAll) {
+            dueQueue = [...cards];
+        } else {
+            // Filter or prioritize due cards based on Ebbinghaus forgetting curve intervals (Hours: 1h -> 6h -> 12h -> 24h -> 48h+ days)
+            const now = new Date().getTime();
+            dueQueue = cards.filter(card => {
+                if (!card.last_reviewed_at) return true; // never reviewed = due now
+                const lastReview = new Date(card.last_reviewed_at).getTime();
+                const intervalHours = card.interval_hours || 0;
+                const intervalMs = intervalHours * 60 * 60 * 1000;
+                const isDue = intervalHours === 0 || (now - lastReview >= intervalMs);
+                return isDue;
+            });
 
-        // If all cards are up to date (no cards strictly due right now), show completion screen immediately on login
-        if (dueQueue.length === 0 && cards.length > 0) {
-            cards = data;
-            currentIndex = 0;
-            showingAnswer = false;
-            showCompletionScreen();
-            return;
+            // If all cards are up to date (no cards strictly due right now), show completion screen immediately on login
+            if (dueQueue.length === 0 && cards.length > 0) {
+                currentIndex = 0;
+                showingAnswer = false;
+                showCompletionScreen();
+                return;
+            }
         }
 
         currentIndex = 0;
@@ -864,7 +866,7 @@ ${content}`;
                 <p style="font-size: 14px; font-weight: bold; color: #1e293b; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
                     ⏳ Recommended Next Memory Check:<br>Come back in <strong>${minNextReviewHours} hours</strong> (tomorrow) for your next review session!
                 </p>
-                <button onclick="loadFlashcards()" class="btn-secondary" style="margin-top: 10px; width: 100%;">Review Again Now</button>
+                <button onclick="loadFlashcards(true)" class="btn-secondary" style="margin-top: 10px; width: 100%;">Review Again Now</button>
             </div>
         `;
     }
