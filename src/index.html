@@ -244,6 +244,7 @@
 
 <script>
     const SUPABASE_URL = 'https://drfsdxongvpgvdcoibxd.supabase.co';
+    const SUPABASE_ANON_KEY_DEFAULT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyZnNkeG9uZ3ZwZ3ZkY29pYnhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NDA2NjUsImV4cCI6MjEwNDQxNjY2NX0.AMFYn1Br_tCXu0C5eI_f1oS8s90NBwWPitxF66YpeWI';
     let supabaseClient = null;
 
     let cards = [];
@@ -258,7 +259,7 @@
         const savedGeminiKey = localStorage.getItem('GEMINI_API_KEY');
         if (savedGeminiKey) document.getElementById('apiKeyInput').value = savedGeminiKey;
 
-        const savedSupabaseKey = localStorage.getItem('SUPABASE_ANON_KEY');
+        const savedSupabaseKey = localStorage.getItem('SUPABASE_ANON_KEY') || SUPABASE_ANON_KEY_DEFAULT;
         if (savedSupabaseKey) {
             document.getElementById('supabaseKeyInput').value = savedSupabaseKey;
             initSupabase(savedSupabaseKey);
