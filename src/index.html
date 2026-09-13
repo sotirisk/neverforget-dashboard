@@ -46,8 +46,9 @@
         .controls button { flex: 1; }
         .feedback-controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .feedback-controls button { flex: 1; }
-        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #e2e8f0; margin-bottom: 10px; }
-        .stats-badge { font-size: 11px; background: #f1f5f9; color: #475569; padding: 3px 6px; border-radius: 4px; margin-left: 5px; }
+        .badge-category { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background: #e0f2fe; color: #0369a1; margin-left: 5px; margin-bottom: 10px; }
+        .badge-visibility { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background: #fef3c7; color: #b45309; margin-left: 5px; margin-bottom: 10px; }
+        .explore-banner { background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px; border-radius: 6px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         
         /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); padding-top: 40px; }
@@ -61,9 +62,10 @@
 <div class="header">
     <h1>NeverForget</h1>
     <div class="header-actions">
-        <button onclick="toggleManualCardForm()" class="btn-info">➕ Create card manually</button>
-        <button onclick="toggleInfoModal()" class="btn-info" style="background-color: #6366f1;">💡 Hint / Info</button>
-        <button onclick="toggleSettings()" class="btn-secondary">⚙️ Settings</button>
+        <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public</button>
+        <button onclick="toggleManualCardForm()" class="btn-info">➕ Manual</button>
+        <button onclick="toggleInfoModal()" class="btn-info" style="background-color: #6366f1;">💡 Hint</button>
+        <button onclick="toggleSettings()" class="btn-secondary">⚙️</button>
     </div>
 </div>
 
@@ -91,7 +93,10 @@
             <span id="cardProgress" class="badge">Card 0 of 0</span>
             <span id="cardSide" class="badge" style="background: #dbeafe; color: #1e40af;">Question</span>
             <span id="cardStats" class="stats-badge" style="display: inline-block;">✓ 0 | ✗ 0</span>
+            <span id="cardCategoryBadge" class="badge-category" style="display: none;"></span>
+            <span id="cardVisibilityBadge" class="badge-visibility" style="display: none;"></span>
         </div>
+        <div id="cardTimeAgo" style="font-size: 13px; color: #64748b; margin-top: 6px; margin-bottom: 2px;"></div>
         
         <div id="cardBox" class="flashcard-display" onclick="flipCard()">
             Loading cards...
@@ -147,6 +152,50 @@
                 Create Card
             </button>
         </div>
+    </div>
+</div>
+
+<!-- Explore Public Cards Modal -->
+<div id="exploreModal" class="modal">
+    <div class="modal-content" style="max-width: 650px;">
+        <span class="close" onclick="toggleExploreModal()">&times;</span>
+        <h2>🌍 Explore Public Knowledge & Test Your Memory</h2>
+        <p style="font-size: 14px; color: #475569;">
+            Browse and test yourself on public cards shared by other learners, ordered by popularity (most known first).
+        </p>
+
+        <div style="margin-bottom: 15px;">
+            <label for="exploreCategoryFilter" style="font-size: 13px; font-weight: bold; color: #475569;">Filter by Category:</label>
+            <select id="exploreCategoryFilter" onchange="loadPublicCards()" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 5px;">
+                <option value="ALL">All Categories</option>
+                <option value="General Knowledge">General Knowledge</option>
+                <option value="IT">IT</option>
+                <option value="Geography">Geography</option>
+                <option value="Biology">Biology</option>
+                <option value="History">History</option>
+                <option value="Science">Science</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+
+        <div id="exploreCardBox" class="flashcard-display" onclick="flipExploreCard()" style="background-color: #fafafa; min-height: 150px;">
+            Click to load public cards...
+        </div>
+
+        <div id="exploreMeta" style="text-align: center; font-size: 13px; color: #0284c7; font-weight: bold; margin-bottom: 15px;"></div>
+
+        <div id="exploreControls" style="display: none;">
+            <div class="controls">
+                <button onclick="flipExploreCard()">Flip</button>
+                <button onclick="nextExploreCard()" class="btn-secondary">Next Public Card</button>
+            </div>
+            <div class="feedback-controls">
+                <button class="btn-success" onclick="recordPublicKnowledge(true)">I Know This 👍</button>
+                <button class="btn-warning" onclick="recordPublicKnowledge(false)">Didn't Know 🔄</button>
+            </div>
+        </div>
+
+        <button onclick="toggleExploreModal()" class="btn-secondary" style="width: 100%; margin-top: 15px;">Close Explorer</button>
     </div>
 </div>
 
@@ -268,12 +317,135 @@
         }
     }
 
+    function toggleExploreModal() {
+        const modal = document.getElementById('exploreModal');
+        const isOpen = modal.style.display === 'block';
+        modal.style.display = isOpen ? 'none' : 'block';
+        if (!isOpen) {
+            loadPublicCards();
+        }
+    }
+
     // Close modals when clicking outside
     window.onclick = function(event) {
         const settingsModal = document.getElementById('settingsModal');
         const infoModal = document.getElementById('infoModal');
+        const exploreModal = document.getElementById('exploreModal');
         if (event.target === settingsModal) settingsModal.style.display = 'none';
         if (event.target === infoModal) infoModal.style.display = 'none';
+        if (event.target === exploreModal) exploreModal.style.display = 'none';
+    }
+
+    let publicCards = [];
+    let publicIndex = 0;
+    let showingExploreAnswer = false;
+
+    async function loadPublicCards() {
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+        if (!supabaseKey) {
+            document.getElementById('exploreCardBox').innerText = 'Please configure your Supabase Anon Key in Settings first.';
+            return;
+        }
+        initSupabase(supabaseKey);
+
+        const categoryFilter = document.getElementById('exploreCategoryFilter').value;
+        let query = supabaseClient
+            .from('flashcards')
+            .select('id, question, answer, category, visibility, known_count')
+            .eq('visibility', 'public')
+            .order('known_count', { ascending: false });
+
+        if (categoryFilter !== 'ALL') {
+            query = query.eq('category', categoryFilter);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            document.getElementById('exploreCardBox').innerText = 'Error loading public cards: ' + error.message;
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            document.getElementById('exploreCardBox').innerText = 'No public cards found in this category yet.';
+            document.getElementById('exploreMeta').innerText = '';
+            document.getElementById('exploreControls').style.display = 'none';
+            publicCards = [];
+            return;
+        }
+
+        publicCards = data;
+        publicIndex = 0;
+        showingExploreAnswer = false;
+        renderExploreCard();
+    }
+
+    function renderExploreCard() {
+        if (publicCards.length === 0 || publicIndex >= publicCards.length) {
+            document.getElementById('exploreCardBox').innerText = '🎉 You have explored all public cards in this category!';
+            document.getElementById('exploreMeta').innerText = '';
+            document.getElementById('exploreControls').style.display = 'none';
+            return;
+        }
+
+        const card = publicCards[publicIndex];
+        const cardBox = document.getElementById('exploreCardBox');
+        const exploreMeta = document.getElementById('exploreMeta');
+        const exploreControls = document.getElementById('exploreControls');
+
+        exploreControls.style.display = 'block';
+        exploreMeta.innerText = `Category: ${card.category || 'General Knowledge'} | 👥 Already known by ${card.known_count || 0} persons (Card ${publicIndex + 1} of ${publicCards.length})`;
+
+        if (showingExploreAnswer) {
+            cardBox.innerText = card.answer;
+            cardBox.style.backgroundColor = '#f0fdf4';
+        } else {
+            cardBox.innerText = card.question;
+            cardBox.style.backgroundColor = '#fafafa';
+        }
+    }
+
+    function flipExploreCard() {
+        if (publicCards.length === 0) return;
+        showingExploreAnswer = !showingExploreAnswer;
+        renderExploreCard();
+    }
+
+    function nextExploreCard() {
+        if (publicCards.length === 0) return;
+        if (publicIndex < publicCards.length - 1) {
+            publicIndex++;
+        } else {
+            publicIndex = 0; // loop around or complete
+        }
+        showingExploreAnswer = false;
+        renderExploreCard();
+    }
+
+    async function recordPublicKnowledge(known) {
+        if (publicCards.length === 0 || publicIndex >= publicCards.length) return;
+        const currentCard = publicCards[publicIndex];
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+        if (!supabaseKey) return;
+        initSupabase(supabaseKey);
+
+        if (known) {
+            const newKnownCount = (currentCard.known_count || 0) + 1;
+            currentCard.known_count = newKnownCount;
+            try {
+                await supabaseClient
+                    .from('flashcards')
+                    .update({ known_count: newKnownCount })
+                    .eq('id', currentCard.id);
+            } catch (err) {
+                console.error('Failed to update known count:', err);
+            }
+            alert('Recorded! This public card popularity count has increased.');
+        } else {
+            alert('Good practice! Review this concept to master it.');
+        }
+
+        nextExploreCard();
     }
 
     function handleFileSelect(event) {
@@ -301,6 +473,7 @@
         }
 
         initSupabase(supabaseKey);
+        const { category, visibility } = classifyCardContent(question, answer);
 
         try {
             const { error } = await supabaseClient.from('flashcards').insert({
@@ -310,7 +483,10 @@
                 interval: 0,
                 ease_factor: 2.5,
                 correct_count: 0,
-                incorrect_count: 0
+                incorrect_count: 0,
+                category,
+                visibility,
+                known_count: 0
             });
 
             if (error) throw error;
@@ -324,7 +500,30 @@
         }
     }
 
-    // Ingestion Logic
+    // Helper for Automatic Categorization & Visibility
+    function classifyCardContent(question, answer) {
+        const text = (question + " " + answer).toLowerCase();
+        let category = "General Knowledge";
+        if (text.includes('code') || text.includes('javascript') || text.includes('python') || text.includes('sql') || text.includes('api') || text.includes('database') || text.includes('software') || text.includes('html') || text.includes('function') || text.includes('server')) {
+            category = "IT";
+        } else if (text.includes('country') || text.includes('capital') || text.includes('river') || text.includes('mountain') || text.includes('continent') || text.includes('ocean') || text.includes('map') || text.includes('border')) {
+            category = "Geography";
+        } else if (text.includes('cell') || text.includes('dna') || text.includes('protein') || text.includes('organism') || text.includes('species') || text.includes('evolution') || text.includes('tissue') || text.includes('photosynthesis')) {
+            category = "Biology";
+        } else if (text.includes('war') || text.includes('century') || text.includes('empire') || text.includes('president') || text.includes('revolution') || text.includes('treaty') || text.includes('dynasty')) {
+            category = "History";
+        } else if (text.includes('physics') || text.includes('chemistry') || text.includes('atom') || text.includes('molecule') || text.includes('gravity') || text.includes('energy') || text.includes('equation')) {
+            category = "Science";
+        }
+
+        // Automatic visibility rule: cards are public by default unless marked private or personal keyword
+        let visibility = "public";
+        if (text.includes('personal') || text.includes('my note') || text.includes('confidential') || text.includes('secret')) {
+            visibility = "private";
+        }
+
+        return { category, visibility };
+    }
     async function processContent() {
         const apiKey = document.getElementById('apiKeyInput').value.trim();
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
@@ -368,15 +567,21 @@ ${content}`;
             const flashcards = JSON.parse(data.candidates[0].content.parts[0].text);
             statusDiv.innerText = `2/2: Saving ${flashcards.length} flashcards to Supabase...`;
 
-            const recordsToInsert = flashcards.map(card => ({
-                user_id: crypto.randomUUID(),
-                question: card.question,
-                answer: card.answer,
-                interval: 0,
-                ease_factor: 2.5,
-                correct_count: 0,
-                incorrect_count: 0
-            }));
+            const recordsToInsert = flashcards.map(card => {
+                const { category, visibility } = classifyCardContent(card.question, card.answer);
+                return {
+                    user_id: crypto.randomUUID(),
+                    question: card.question,
+                    answer: card.answer,
+                    interval: 0,
+                    ease_factor: 2.5,
+                    correct_count: 0,
+                    incorrect_count: 0,
+                    category,
+                    visibility,
+                    known_count: 0
+                };
+            });
 
             const { error: dbError } = await supabaseClient.from('flashcards').insert(recordsToInsert);
             if (dbError) throw dbError;
@@ -409,7 +614,7 @@ ${content}`;
 
         const { data, error } = await supabaseClient
             .from('flashcards')
-            .select('id, question, answer, interval, ease_factor, correct_count, incorrect_count, last_reviewed_at')
+            .select('id, question, answer, interval, ease_factor, correct_count, incorrect_count, last_reviewed_at, category, visibility, known_count')
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -437,10 +642,13 @@ ${content}`;
             return intervalDays === 0 || (now - lastReview >= intervalMs);
         });
 
-        // If all cards are mastered for now, dueQueue can include cards with highest incorrect counts or oldest reviews for extra practice,
-        // or we show the completion screen if user has reviewed everything due.
+        // If all cards are mastered for now, dueQueue can include all cards sorted by oldest review time first (or never reviewed)
         if (dueQueue.length === 0 && cards.length > 0) {
-            dueQueue = [...cards]; // fallback to all cards if none strictly due
+            dueQueue = [...cards].sort((a, b) => {
+                if (!a.last_reviewed_at) return -1;
+                if (!b.last_reviewed_at) return 1;
+                return new Date(a.last_reviewed_at) - new Date(b.last_reviewed_at);
+            });
         }
 
         currentIndex = 0;
@@ -459,12 +667,35 @@ ${content}`;
         const cardSide = document.getElementById('cardSide');
         const cardProgress = document.getElementById('cardProgress');
         const cardStats = document.getElementById('cardStats');
+        const cardTimeAgo = document.getElementById('cardTimeAgo');
         const activeControls = document.getElementById('activeReviewControls');
         
         activeControls.style.display = 'block';
         cardProgress.innerText = `Card ${currentIndex + 1} of ${dueQueue.length}`;
         cardStats.style.display = 'inline-block';
         cardStats.innerText = `✓ ${currentCard.correct_count || 0} | ✗ ${currentCard.incorrect_count || 0}`;
+
+        const cardCategoryBadge = document.getElementById('cardCategoryBadge');
+        const cardVisibilityBadge = document.getElementById('cardVisibilityBadge');
+
+        cardCategoryBadge.style.display = 'inline-block';
+        cardCategoryBadge.innerText = currentCard.category || 'General Knowledge';
+
+        cardVisibilityBadge.style.display = 'inline-block';
+        const isPub = (currentCard.visibility || 'public') === 'public';
+        cardVisibilityBadge.innerText = isPub ? `Public (Known by ${currentCard.known_count || 0})` : 'Private';
+        cardVisibilityBadge.style.background = isPub ? '#fef3c7' : '#f1f5f9';
+        cardVisibilityBadge.style.color = isPub ? '#b45309' : '#64748b';
+
+        if (currentCard.last_reviewed_at) {
+            const diffHours = Math.round((new Date().getTime() - new Date(currentCard.last_reviewed_at).getTime()) / (60 * 60 * 1000));
+            const timeAgoStr = diffHours <= 1 ? 'about an hour ago' : `${diffHours} hours ago`;
+            cardTimeAgo.style.display = 'block';
+            cardTimeAgo.innerText = `Last processed: ${timeAgoStr}`;
+        } else {
+            cardTimeAgo.style.display = 'block';
+            cardTimeAgo.innerText = `Never reviewed before`;
+        }
 
         if (showingAnswer) {
             cardBox.innerText = currentCard.answer;
@@ -486,11 +717,13 @@ ${content}`;
         const cardProgress = document.getElementById('cardProgress');
         const cardSide = document.getElementById('cardSide');
         const cardStats = document.getElementById('cardStats');
+        const cardTimeAgo = document.getElementById('cardTimeAgo');
         const activeControls = document.getElementById('activeReviewControls');
 
         cardProgress.innerText = `Completed!`;
         cardSide.innerText = 'Done';
         cardStats.style.display = 'none';
+        cardTimeAgo.style.display = 'none';
         activeControls.style.display = 'none';
 
         // Calculate next recommended return time based on Ebbinghaus intervals
