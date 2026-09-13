@@ -614,7 +614,7 @@ ${content}`;
 
         const { data, error } = await supabaseClient
             .from('flashcards')
-            .select('id, question, answer, interval, ease_factor, correct_count, incorrect_count, last_reviewed_at, category, visibility, known_count')
+            .select('id, question, answer, interval, interval_hours, ease_factor, correct_count, incorrect_count, last_reviewed_at, category, visibility, known_count')
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -631,15 +631,14 @@ ${content}`;
 
         cards = data;
         
-        // Filter or prioritize due cards based on Ebbinghaus forgetting curve intervals
+        // Filter or prioritize due cards based on Ebbinghaus forgetting curve intervals (Hours: 1h -> 6h -> 12h -> 24h -> 48h+ days)
         const now = new Date().getTime();
         dueQueue = cards.filter(card => {
             if (!card.last_reviewed_at) return true; // never reviewed = due now
             const lastReview = new Date(card.last_reviewed_at).getTime();
-            const intervalDays = card.interval || 0;
-            const intervalMs = intervalDays * 24 * 60 * 60 * 1000;
-            // If interval is 0, due immediately. If interval > 0, due after interval elapses.
-            const isDue = intervalDays === 0 || (now - lastReview >= intervalMs);
+            const intervalHours = card.interval_hours || 0;
+            const intervalMs = intervalHours * 60 * 60 * 1000;
+            const isDue = intervalHours === 0 || (now - lastReview >= intervalMs);
             return isDue;
         });
 
@@ -782,13 +781,33 @@ ${content}`;
 
         const correctCount = (currentCard.correct_count || 0) + (isCorrect ? 1 : 0);
         const incorrectCount = (currentCard.incorrect_count || 0) + (isCorrect ? 0 : 1);
-        const newInterval = isCorrect ? Math.max(1, (currentCard.interval || 0) * 2) : 0; // Ebbinghaus exponential spacing on correct
+        
+        // Progression of hours when correct: 0 -> 1h -> 6h -> 12h -> 24h -> 48h (2 days) ...
+        let currentHours = currentCard.interval_hours !== undefined && currentCard.interval_hours !== null ? currentCard.interval_hours : (currentCard.interval ? currentCard.interval * 24 : 0);
+        let newHours = 0;
+        let newIntervalDays = 0;
+
+        if (!isCorrect) {
+            newHours = 0; // reset to immediate review on error
+            newIntervalDays = 0;
+        } else {
+            if (currentHours === 0) newHours = 1;
+            else if (currentHours === 1) newHours = 6;
+            else if (currentHours === 6) newHours = 12;
+            else if (currentHours === 12) newHours = 24;
+            else if (currentHours === 24) newHours = 48;
+            else newHours = currentHours * 2;
+
+            newIntervalDays = Math.round(newHours / 24);
+        }
+
         const now = new Date().toISOString();
 
         // Update local object immediately for instant UI feedback
         currentCard.correct_count = correctCount;
         currentCard.incorrect_count = incorrectCount;
-        currentCard.interval = newInterval;
+        currentCard.interval_hours = newHours;
+        currentCard.interval = newIntervalDays;
         currentCard.last_reviewed_at = now;
 
         try {
@@ -797,7 +816,8 @@ ${content}`;
                 .update({
                     correct_count: correctCount,
                     incorrect_count: incorrectCount,
-                    interval: newInterval,
+                    interval_hours: newHours,
+                    interval: newIntervalDays,
                     last_reviewed_at: now
                 })
                 .eq('id', currentCard.id);
