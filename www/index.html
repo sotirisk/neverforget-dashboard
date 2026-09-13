@@ -531,9 +531,11 @@
         initSupabase(supabaseKey);
         const { category, visibility } = classifyCardContent(question, answer);
 
+        const userId = currentUser ? currentUser.id : null;
+
         try {
             const { error } = await supabaseClient.from('flashcards').insert({
-                user_id: crypto.randomUUID(),
+                user_id: userId,
                 question,
                 answer,
                 interval: 0,
@@ -623,10 +625,11 @@ ${content}`;
             const flashcards = JSON.parse(data.candidates[0].content.parts[0].text);
             statusDiv.innerText = `2/2: Saving ${flashcards.length} flashcards to Supabase...`;
 
+            const userId = currentUser ? currentUser.id : null;
             const recordsToInsert = flashcards.map(card => {
                 const { category, visibility } = classifyCardContent(card.question, card.answer);
                 return {
-                    user_id: crypto.randomUUID(),
+                    user_id: userId,
                     question: card.question,
                     answer: card.answer,
                     interval: 0,
@@ -668,10 +671,19 @@ ${content}`;
         
         initSupabase(supabaseKey);
 
-        const { data, error } = await supabaseClient
+        let query = supabaseClient
             .from('flashcards')
-            .select('id, question, answer, interval, interval_hours, ease_factor, correct_count, incorrect_count, last_reviewed_at, category, visibility, known_count')
+            .select('id, question, answer, interval, interval_hours, ease_factor, correct_count, incorrect_count, last_reviewed_at, category, visibility, known_count, user_id')
             .order('created_at', { ascending: false });
+
+        if (currentUser) {
+            query = query.eq('user_id', currentUser.id);
+        } else {
+            // If not logged in, show unassigned or public cards
+            query = query.is('user_id', null);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
             document.getElementById('cardBox').innerText = 'Error loading cards: ' + error.message;
