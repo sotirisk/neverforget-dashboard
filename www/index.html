@@ -639,7 +639,8 @@ ${content}`;
             const intervalDays = card.interval || 0;
             const intervalMs = intervalDays * 24 * 60 * 60 * 1000;
             // If interval is 0, due immediately. If interval > 0, due after interval elapses.
-            return intervalDays === 0 || (now - lastReview >= intervalMs);
+            const isDue = intervalDays === 0 || (now - lastReview >= intervalMs);
+            return isDue;
         });
 
         // If all cards are up to date (no cards strictly due right now), show completion screen immediately on login
