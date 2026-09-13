@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NeverForget</string>
+    <string name="title_activity_main">NeverForget</string>
+    <string name="package_name">com.neverforget.app</string>
+    <string name="custom_url_scheme">com.neverforget.app</string>
+</resources>

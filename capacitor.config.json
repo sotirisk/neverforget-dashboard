@@ -1,0 +1,6 @@
+{
+  "appId": "com.neverforget.app",
+  "appName": "NeverForget",
+  "webDir": "www",
+  "linuxAndroidStudioPath": "/snap/bin/android-studio"
+}
