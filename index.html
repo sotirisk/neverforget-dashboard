@@ -65,6 +65,7 @@
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Manual</button>
         <button onclick="toggleInfoModal()" class="btn-info" style="background-color: #6366f1;">💡 Hint</button>
+        <button onclick="signInWithGoogle()" class="btn-info" style="background-color: #ea4335;" id="authBtn">🔐 Login with Google</button>
         <button onclick="toggleSettings()" class="btn-secondary">⚙️</button>
     </div>
 </div>
@@ -254,6 +255,8 @@
     let lastAIQuestion = '';
     let lastAIAnswer = '';
 
+    let currentUser = null;
+
     // Load credentials and cards on startup
     document.addEventListener('DOMContentLoaded', async () => {
         const savedGeminiKey = localStorage.getItem('GEMINI_API_KEY');
@@ -286,11 +289,63 @@
         const currentSupabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (currentSupabaseKey) {
             initSupabase(currentSupabaseKey);
+            
+            // Check active session
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session && session.user) {
+                currentUser = session.user;
+                updateAuthUI();
+            }
+
+            // Listen to auth state changes
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                currentUser = session ? session.user : null;
+                updateAuthUI();
+                loadFlashcards();
+            });
+
             loadFlashcards();
         } else {
             document.getElementById('cardBox').innerText = 'Please configure your Supabase Anon Key in Settings.';
         }
     });
+
+    async function signInWithGoogle() {
+        if (!supabaseClient) return;
+        try {
+            const { error } = await supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: window.location.origin + window.location.pathname
+                }
+            });
+            if (error) throw error;
+        } catch (err) {
+            alert('Google Login Error: ' + err.message);
+        }
+    }
+
+    async function signOut() {
+        if (!supabaseClient) return;
+        await supabaseClient.auth.signOut();
+        currentUser = null;
+        updateAuthUI();
+        loadFlashcards();
+    }
+
+    function updateAuthUI() {
+        const authBtn = document.getElementById('authBtn');
+        if (!authBtn) return;
+        if (currentUser) {
+            authBtn.innerText = `👤 ${currentUser.email.split('@')[0]} (Logout)`;
+            authBtn.style.backgroundColor = '#475569';
+            authBtn.onclick = signOut;
+        } else {
+            authBtn.innerText = '🔐 Login with Google';
+            authBtn.style.backgroundColor = '#ea4335';
+            authBtn.onclick = signInWithGoogle;
+        }
+    }
 
     function initSupabase(key) {
         if (key) {
