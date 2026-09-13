@@ -85,8 +85,19 @@
     </div>
 </div>
 
-<!-- Review Interface Card (Default View) -->
-<div class="card">
+<!-- Login / Authentication Gate Card (Shown when logged out) -->
+<div id="loginGateCard" class="card" style="text-align: center; padding: 40px 20px;">
+    <h2 style="color: #1e293b; margin-top: 0;">Welcome to NeverForget 🧠</h2>
+    <p style="color: #64748b; font-size: 16px; line-height: 1.5; margin-bottom: 30px;">
+        Please sign in with your Google account to access your personal flashcards, spaced repetition reviews, and knowledge base.
+    </p>
+    <button onclick="signInWithGoogle()" style="background-color: #ea4335; color: white; padding: 14px 24px; font-size: 16px; width: auto; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 6px; box-shadow: 0 4px 12px rgba(234,67,53,0.3);">
+        🔐 Sign in with Google
+    </button>
+</div>
+
+<!-- Review Interface Card (Default View - Hidden until logged in) -->
+<div class="card" id="mainReviewCard" style="display: none;">
     <h2>Flashcard Review</h2>
     
     <div id="reviewSection" style="margin-top: 20px;">
@@ -335,15 +346,25 @@
 
     function updateAuthUI() {
         const authBtn = document.getElementById('authBtn');
-        if (!authBtn) return;
+        const loginGateCard = document.getElementById('loginGateCard');
+        const mainReviewCard = document.getElementById('mainReviewCard');
+
         if (currentUser) {
-            authBtn.innerText = `👤 ${currentUser.email.split('@')[0]} (Logout)`;
-            authBtn.style.backgroundColor = '#475569';
-            authBtn.onclick = signOut;
+            if (authBtn) {
+                authBtn.innerText = `👤 ${currentUser.email.split('@')[0]} (Logout)`;
+                authBtn.style.backgroundColor = '#475569';
+                authBtn.onclick = signOut;
+            }
+            if (loginGateCard) loginGateCard.style.display = 'none';
+            if (mainReviewCard) mainReviewCard.style.display = 'block';
         } else {
-            authBtn.innerText = '🔐 Login with Google';
-            authBtn.style.backgroundColor = '#ea4335';
-            authBtn.onclick = signInWithGoogle;
+            if (authBtn) {
+                authBtn.innerText = '🔐 Login with Google';
+                authBtn.style.backgroundColor = '#ea4335';
+                authBtn.onclick = signInWithGoogle;
+            }
+            if (loginGateCard) loginGateCard.style.display = 'block';
+            if (mainReviewCard) mainReviewCard.style.display = 'none';
         }
     }
 
