@@ -726,13 +726,16 @@ ${content}`;
         cardTimeAgo.style.display = 'none';
         activeControls.style.display = 'none';
 
-        // Calculate next recommended return time based on Ebbinghaus intervals
+        // Calculate next recommended return time based on Ebbinghaus intervals (using interval_hours)
         let minNextReviewHours = 24;
         cards.forEach(card => {
-            if (card.last_reviewed_at && card.interval > 0) {
-                const nextDue = new Date(new Date(card.last_reviewed_at).getTime() + card.interval * 24 * 60 * 60 * 1000);
-                const hoursLeft = Math.max(1, Math.round((nextDue.getTime() - new Date().getTime()) / (60 * 60 * 1000)));
-                if (hoursLeft < minNextReviewHours) minNextReviewHours = hoursLeft;
+            if (card.last_reviewed_at) {
+                const intervalHours = card.interval_hours !== undefined && card.interval_hours !== null ? card.interval_hours : (card.interval ? card.interval * 24 : 24);
+                if (intervalHours > 0) {
+                    const nextDue = new Date(new Date(card.last_reviewed_at).getTime() + intervalHours * 60 * 60 * 1000);
+                    const hoursLeft = Math.max(1, Math.round((nextDue.getTime() - new Date().getTime()) / (60 * 60 * 1000)));
+                    if (hoursLeft < minNextReviewHours) minNextReviewHours = hoursLeft;
+                }
             }
         });
 
