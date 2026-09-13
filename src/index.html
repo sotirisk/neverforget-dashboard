@@ -306,18 +306,13 @@
             if (session && session.user) {
                 currentUser = session.user;
                 updateAuthUI();
-            } else if (window.location.hash && window.location.hash.includes('access_token')) {
-                // Supabase automatically parses the hash on client init, but let's clear the ugly hash from URL
-                window.history.replaceState(null, null, window.location.pathname);
-                const { data: { session: newSession } } = await supabaseClient.auth.getSession();
-                if (newSession && newSession.user) {
-                    currentUser = newSession.user;
-                    updateAuthUI();
-                }
             }
 
-            // Listen to auth state changes
+            // Listen to auth state changes (Supabase automatically processes the URL hash token here)
             supabaseClient.auth.onAuthStateChange((event, session) => {
+                if (window.location.hash && window.location.hash.includes('access_token')) {
+                    window.history.replaceState(null, null, window.location.pathname);
+                }
                 currentUser = session ? session.user : null;
                 updateAuthUI();
                 loadFlashcards();
