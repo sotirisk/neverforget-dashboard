@@ -60,7 +60,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.9 (Build 20260917.1)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.10 (Build 20260917.2)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Manual</button>
@@ -335,9 +335,11 @@
 
             // Listen to auth state changes
             supabaseClient.auth.onAuthStateChange((event, session) => {
-                currentUser = session ? session.user : null;
-                updateAuthUI();
-                loadFlashcards();
+                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+                    currentUser = session ? session.user : null;
+                    updateAuthUI();
+                    loadFlashcards();
+                }
             });
 
             loadFlashcards();
