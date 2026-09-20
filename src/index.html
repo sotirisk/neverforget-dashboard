@@ -120,11 +120,11 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.12 (Build 20260920.2)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.13 (Build 20260920.3)</span></h1>
     <div class="header-actions">
-        <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public</button>
-        <button onclick="toggleManualCardForm()" class="btn-info">➕ Manual</button>
-        <button onclick="toggleInfoModal()" class="btn-info" style="background-color: #6366f1;">💡 Hint</button>
+        <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
+        <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
+        <button onclick="toggleInfoModal()" class="btn-info" style="background-color: #6366f1;">ℹ️ About This Site</button>
         <button onclick="signInWithGoogle()" class="btn-info" style="background-color: #ea4335;" id="authBtn">🔐 Login with Google</button>
         <button onclick="toggleSettings()" class="btn-secondary">⚙️</button>
     </div>
@@ -274,11 +274,11 @@
     </div>
 </div>
 
-<!-- Spaced Repetition Info Modal (Hint) -->
+<!-- About This Site Modal (spaced repetition explanation) -->
 <div id="infoModal" class="modal">
     <div class="modal-content">
         <span class="close" onclick="toggleInfoModal()">&times;</span>
-        <h2>💡 Spaced Repetition & Memory Timings</h2>
+        <h2>ℹ️ About This Site — Spaced Repetition & Memory Timings</h2>
         <p>Card timings are essential because human memory loses information following an exponential decay curve—a concept known as the <strong>Ebbinghaus Forgetting Curve</strong>.</p>
         <p>When you learn a new card, your recall probability drops rapidly within the first 24 to 48 hours. Spaced repetition algorithms (such as SuperMemo SM-2 or FSRS) use precise interval timing to schedule reviews at the optimal moment: right when you are about to forget the answer.</p>
         <ul>
