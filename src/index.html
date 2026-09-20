@@ -120,7 +120,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.15 (Build 20260920.5)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.16 (Build 20260920.6)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
@@ -387,6 +387,9 @@
     // True while the user is doing an extra "Review Again Now" pass over cards that
     // are NOT due yet. Such a pass must never advance the spaced-repetition schedule.
     let practiceSessionActive = false;
+    // Tracks in-session repeats so a Missed That press re-queues the missed card at
+    // most once per review pass. It is cleared on every new card load.
+    let retriedCardIds = [];
 
     // Check URL hash immediately on script load (before DOMContentLoaded) to clear access_token and set session
     if (window.location.hash && window.location.hash.includes('access_token')) {
@@ -962,8 +965,11 @@ ${content}`;
         if (forceAll) {
             practiceSessionActive = true;
             dueQueue = [...cards];
+            retriedCardIds = [];
         } else {
             practiceSessionActive = false;
+            retriedCardIds = [];
+            retriedCardIds = [];
             // Filter or prioritize due cards based on Ebbinghaus forgetting curve intervals (Hours: 1h -> 6h -> 12h -> 24h -> 48h+ days)
             const now = new Date().getTime();
             dueQueue = cards.filter(card => isCardDue(card, now));
@@ -1189,8 +1195,14 @@ ${content}`;
         }
 
         if (!isCorrect) {
-            // If missed, re-insert into due queue so user practices it again this session
-            dueQueue.push(currentCard);
+            // If missed, re-insert immediately after the remaining cards that are still
+            // unseen this pass. Cards are never removed from dueQueue, so the pass can
+            // always finish, and the missed card comes back at the end of the same
+            // review session.
+            if (currentCard && currentCard.id !== undefined && retriedCardIds.indexOf(currentCard.id) === -1) {
+                retriedCardIds.push(currentCard.id);
+                dueQueue.push(currentCard);
+            }
         }
 
         nextCard();
