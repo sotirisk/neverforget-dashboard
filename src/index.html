@@ -41,7 +41,53 @@
             background-color: #fafafa;
             user-select: none;
             margin-bottom: 15px;
+            position: relative;
+            perspective: 1200px;
+            -webkit-perspective: 1200px;
         }
+        /* 3D Card Flip (class driven) */
+        .flashcard-inner {
+            position: relative;
+            width: 100%;
+            min-height: 160px;
+            transform-style: preserve-3d;
+            -webkit-transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+        .flashcard-inner.is-flipped {
+            transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 10px;
+            box-sizing: border-box;
+            border-radius: 6px;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            overflow-y: auto;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+        }
+        .card-front {
+            background-color: #fafafa;
+            transform: rotateY(0deg);
+        }
+        .card-back {
+            background-color: #f0fdf4;
+            transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg);
+        }
+        .card-message { width: 100%; word-break: break-word; }
         .controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .controls button { flex: 1; }
         .feedback-controls { display: flex; gap: 10px; margin-bottom: 10px; }
@@ -60,7 +106,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.10 (Build 20260917.2)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.11 (Build 20260920.1)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Manual</button>
@@ -111,7 +157,11 @@
         <div id="cardTimeAgo" style="font-size: 13px; color: #64748b; margin-top: 6px; margin-bottom: 2px;"></div>
         
         <div id="cardBox" class="flashcard-display" onclick="flipCard()">
-            Loading cards...
+            <div id="cardMessage" class="card-message" style="display: none;"></div>
+            <div id="flashcardInner" class="flashcard-inner">
+                <div id="cardFront" class="card-face card-front">Loading cards...</div>
+                <div id="cardBack" class="card-face card-back"></div>
+            </div>
         </div>
 
         <div id="activeReviewControls">
@@ -264,6 +314,12 @@
     let showingAnswer = false;
     let lastAIQuestion = '';
     let lastAIAnswer = '';
+    // Tracks the identity the active card queue belongs to. Auth events for the
+    // same user (INITIAL_SESSION / TOKEN_REFRESHED / USER_UPDATED) must never
+    // re-fetch cards or wipe the flip state of the card being reviewed.
+    let lastAuthUserId = null;
+    // Monotonic id used to discard stale/overlapping loadFlashcards() responses.
+    let loadRequestId = 0;
 
     // Check URL hash immediately on script load (before DOMContentLoaded) to clear access_token and set session
     if (window.location.hash && window.location.hash.includes('access_token')) {
@@ -330,21 +386,35 @@
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session && session.user) {
                 currentUser = session.user;
+                lastAuthUserId = session.user.id;
                 updateAuthUI();
             }
 
-            // Listen to auth state changes
+            // Listen to auth state changes.
+            // IMPORTANT: session-check events (INITIAL_SESSION, TOKEN_REFRESHED,
+            // USER_UPDATED) must NOT reload cards or reset the current card/flip
+            // state. Cards are only re-fetched when the signed-in identity really
+            // changes (fresh sign-in for a different user) or on sign-out.
             supabaseClient.auth.onAuthStateChange((event, session) => {
-                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-                    currentUser = session ? session.user : null;
-                    updateAuthUI();
-                    loadFlashcards();
+                const newUser = session ? session.user : null;
+                const newUserId = newUser ? newUser.id : null;
+                const identityChanged = newUserId !== lastAuthUserId;
+
+                currentUser = newUser;
+                updateAuthUI();
+
+                lastAuthUserId = newUserId;
+
+                if (event === 'SIGNED_OUT' || (event === 'SIGNED_IN' && identityChanged)) {
+                    // Defer the fetch: supabase-js holds an internal auth lock while
+                    // the callback runs, so database calls are scheduled afterwards.
+                    setTimeout(() => loadFlashcards(), 0);
                 }
             });
 
             loadFlashcards();
         } else {
-            document.getElementById('cardBox').innerText = 'Please configure your Supabase Anon Key in Settings.';
+            showCardMessage('Please configure your Supabase Anon Key in Settings.');
         }
     });
 
@@ -709,11 +779,68 @@ ${content}`;
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Card flip helpers
+    // The flip state lives on the #flashcardInner element's `is-flipped` class
+    // so that no background re-render can desynchronise the visible card face.
+    // ---------------------------------------------------------------------
+    function showCardMessage(content, asHtml = false) {
+        const messageEl = document.getElementById('cardMessage');
+        const inner = document.getElementById('flashcardInner');
+        if (inner) {
+            inner.classList.remove('is-flipped');
+            inner.style.display = 'none';
+        }
+        showingAnswer = false;
+        if (messageEl) {
+            if (asHtml) {
+                messageEl.innerHTML = content;
+            } else {
+                messageEl.textContent = content;
+            }
+            messageEl.style.display = 'block';
+        }
+    }
+
+    function hideCardMessage() {
+        const messageEl = document.getElementById('cardMessage');
+        const inner = document.getElementById('flashcardInner');
+        if (messageEl) messageEl.style.display = 'none';
+        if (inner) inner.style.display = '';
+    }
+
+    // Must be called whenever a new card is shown or the review queue is reset so
+    // that a card never starts (or comes back) in the flipped state.
+    function resetCardFlip() {
+        const inner = document.getElementById('flashcardInner');
+        if (inner) inner.classList.remove('is-flipped');
+        showingAnswer = false;
+        updateCardSideBadge();
+    }
+
+    function updateCardSideBadge() {
+        const cardSide = document.getElementById('cardSide');
+        if (!cardSide) return;
+        if (showingAnswer) {
+            cardSide.innerText = 'Answer';
+            cardSide.style.background = '#dcfce7';
+            cardSide.style.color = '#166534';
+        } else {
+            cardSide.innerText = 'Question';
+            cardSide.style.background = '#dbeafe';
+            cardSide.style.color = '#1e40af';
+        }
+    }
+
+
     // Flashcard Review Logic (Ebbinghaus Forgetting Curve & Due Queue)
     async function loadFlashcards(forceAll = false) {
+        // Every new load invalidates any in-flight load, so a slow background
+        // response can never overwrite the card that is currently being reviewed.
+        const requestId = ++loadRequestId;
         const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
         if (!supabaseKey) {
-            document.getElementById('cardBox').innerText = 'Please configure your Supabase Anon Key in Settings.';
+            showCardMessage('Please configure your Supabase Anon Key in Settings.');
             return;
         }
         
@@ -733,13 +860,17 @@ ${content}`;
 
         const { data, error } = await query;
 
+        // Ignore stale responses: a newer load (or an identity change) already
+        // took ownership of the review queue.
+        if (requestId !== loadRequestId) return;
+
         if (error) {
-            document.getElementById('cardBox').innerText = 'Error loading cards: ' + error.message;
+            showCardMessage('Error loading cards: ' + error.message);
             return;
         }
 
         if (!data || data.length === 0) {
-            document.getElementById('cardBox').innerText = 'No flashcards found in database. Add notes or create cards manually!';
+            showCardMessage('No flashcards found in database. Add notes or create cards manually!');
             cards = [];
             dueQueue = [];
             return;
@@ -782,12 +913,14 @@ ${content}`;
         }
 
         const currentCard = dueQueue[currentIndex];
-        const cardBox = document.getElementById('cardBox');
         const cardSide = document.getElementById('cardSide');
         const cardProgress = document.getElementById('cardProgress');
         const cardStats = document.getElementById('cardStats');
         const cardTimeAgo = document.getElementById('cardTimeAgo');
         const activeControls = document.getElementById('activeReviewControls');
+
+        // A real card is on screen again: drop any status/error message.
+        hideCardMessage();
         
         activeControls.style.display = 'block';
         cardProgress.innerText = `Card ${currentIndex + 1} of ${dueQueue.length}`;
@@ -816,23 +949,16 @@ ${content}`;
             cardTimeAgo.innerText = `Never reviewed before`;
         }
 
-        if (showingAnswer) {
-            cardBox.innerText = currentCard.answer;
-            cardBox.style.backgroundColor = '#f0fdf4';
-            cardSide.innerText = 'Answer';
-            cardSide.style.background = '#dcfce7';
-            cardSide.style.color = '#166534';
-        } else {
-            cardBox.innerText = currentCard.question;
-            cardBox.style.backgroundColor = '#fafafa';
-            cardSide.innerText = 'Question';
-            cardSide.style.background = '#dbeafe';
-            cardSide.style.color = '#1e40af';
-        }
+        // Both faces are always populated; the visible one is decided purely by
+        // the `is-flipped` class on .flashcard-inner.
+        document.getElementById('cardFront').innerText = currentCard.question;
+        document.getElementById('cardBack').innerText = currentCard.answer;
+
+        // New/reset card => always start on the question, never flipped.
+        resetCardFlip();
     }
 
     function showCompletionScreen() {
-        const cardBox = document.getElementById('cardBox');
         const cardProgress = document.getElementById('cardProgress');
         const cardSide = document.getElementById('cardSide');
         const cardStats = document.getElementById('cardStats');
@@ -858,7 +984,9 @@ ${content}`;
             }
         });
 
-        cardBox.innerHTML = `
+        // The flip structure is hidden while the completion message is shown, and
+        // the is-flipped class is cleared so the next session starts unflipped.
+        showCardMessage(`
             <div style="padding: 10px;">
                 <h3 style="color: #16a34a; margin-top: 0;">🎉 You are OK for now!</h3>
                 <p style="font-size: 15px; color: #475569; line-height: 1.5;">
@@ -870,13 +998,17 @@ ${content}`;
                 </p>
                 <button onclick="loadFlashcards(true)" class="btn-secondary" style="margin-top: 10px; width: 100%;">Review Again Now</button>
             </div>
-        `;
+        `, true);
     }
 
+    // Toggle button / card click: the flip state is a pure CSS class toggle and
+    // never re-renders (and therefore never loses) the active card.
     function flipCard() {
-        if (dueQueue.length === 0) return;
+        if (dueQueue.length === 0 || currentIndex >= dueQueue.length) return;
         showingAnswer = !showingAnswer;
-        renderCard();
+        const inner = document.getElementById('flashcardInner');
+        if (inner) inner.classList.toggle('is-flipped');
+        updateCardSideBadge();
     }
 
     function nextCard() {
@@ -970,7 +1102,10 @@ ${content}`;
         const createCardButton = document.getElementById('create-card-btn');
         const userQuery = inputEl.value.trim();
         const apiKey = document.getElementById('apiKeyInput').value.trim();
-        const cardText = document.getElementById('cardBox')?.innerText || '';
+        // Same semantics as before the 3D flip: use the currently visible side of
+        // the active card (both faces now live in the DOM at once).
+        const activeCard = (dueQueue.length > 0 && currentIndex < dueQueue.length) ? dueQueue[currentIndex] : null;
+        const cardText = activeCard ? (showingAnswer ? activeCard.answer : activeCard.question) : '';
 
         if (!userQuery || !apiKey || !cardText) return;
 
