@@ -120,7 +120,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.14 (Build 20260920.4)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.15 (Build 20260920.5)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
@@ -187,6 +187,15 @@
                 <button class="btn-success" onclick="markGotIt()">Got It 👍</button>
                 <button class="btn-warning" onclick="markMissedThat()">Missed That 🔄</button>
             </div>
+
+            <button
+                id="edit-card-btn"
+                onclick="openEditCardModal()"
+                class="btn-info"
+                style="width: 100%; margin-top: 5px;"
+            >
+                ✏️ Edit Current Card
+            </button>
 
             <button
                 id="delete-card-btn"
@@ -288,6 +297,47 @@
             <li><strong>Optimizes Study Efficiency:</strong> By scheduling reviews according to individual memory decay rates, you achieve up to 90%+ long-term retention while spending the absolute minimum time studying each day.</li>
         </ul>
         <button onclick="toggleInfoModal()" class="btn-secondary" style="width: 100%; margin-top: 15px;">Got It</button>
+    </div>
+</div>
+
+<!-- Edit Card Modal -->
+<div id="editCardModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeEditCardModal()">&times;</span>
+        <h2>✏️ Edit Card</h2>
+        <p style="font-size: 14px; color: #475569;">
+            Change the question, the answer, its category or its visibility. Editing a card never
+            affects its spaced-repetition schedule, so its next review time stays exactly as it was.
+        </p>
+
+        <label for="editQuestionInput" style="font-size: 13px; font-weight: bold; color: #475569; display: block; margin-bottom: 5px;">Question:</label>
+        <textarea id="editQuestionInput" placeholder="Question..."></textarea>
+
+        <label for="editAnswerInput" style="font-size: 13px; font-weight: bold; color: #475569; display: block; margin-bottom: 5px;">Answer:</label>
+        <textarea id="editAnswerInput" placeholder="Answer..."></textarea>
+
+        <label for="editCategorySelect" style="font-size: 13px; font-weight: bold; color: #475569; display: block; margin-bottom: 5px;">Category:</label>
+        <select id="editCategorySelect" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px;">
+            <option value="General Knowledge">General Knowledge</option>
+            <option value="IT">IT</option>
+            <option value="Geography">Geography</option>
+            <option value="Biology">Biology</option>
+            <option value="History">History</option>
+            <option value="Science">Science</option>
+            <option value="Other">Other</option>
+        </select>
+
+        <label for="editVisibilitySelect" style="font-size: 13px; font-weight: bold; color: #475569; display: block; margin-bottom: 5px;">Visibility:</label>
+        <select id="editVisibilitySelect" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px;">
+            <option value="public">Public (can appear in Explore Public Questions)</option>
+            <option value="private">Private (only visible to you)</option>
+        </select>
+
+        <div style="display: flex; gap: 10px;">
+            <button id="save-card-edits-btn" onclick="saveCardEdits()" class="btn-success">Save Changes</button>
+            <button onclick="closeEditCardModal()" class="btn-secondary" style="width: auto;">Cancel</button>
+        </div>
+        <div id="editCardStatus" style="margin-top: 10px; font-size: 13px; font-weight: bold;"></div>
     </div>
 </div>
 
@@ -522,9 +572,11 @@
         const settingsModal = document.getElementById('settingsModal');
         const infoModal = document.getElementById('infoModal');
         const exploreModal = document.getElementById('exploreModal');
+        const editCardModal = document.getElementById('editCardModal');
         if (event.target === settingsModal) settingsModal.style.display = 'none';
         if (event.target === infoModal) infoModal.style.display = 'none';
         if (event.target === exploreModal) exploreModal.style.display = 'none';
+        if (event.target === editCardModal) editCardModal.style.display = 'none';
     }
 
     let publicCards = [];
@@ -1292,6 +1344,92 @@ Learner Question: "${userQuery}"`;
             alert(`Error deleting card: ${err.message}`);
         } finally {
             deleteButton.disabled = false;
+        }
+    }
+
+    function openEditCardModal() {
+        if (dueQueue.length === 0 || currentIndex >= dueQueue.length) return;
+        const currentCard = dueQueue[currentIndex];
+
+        document.getElementById('editQuestionInput').value = currentCard.question || '';
+        document.getElementById('editAnswerInput').value = currentCard.answer || '';
+
+        // If the card was stored with a category that is not in the fixed list, add
+        // it as an option first so saving can never silently re-categorise the card.
+        const categorySelect = document.getElementById('editCategorySelect');
+        const cardCategory = currentCard.category || 'General Knowledge';
+        if (!Array.from(categorySelect.options).some(option => option.value === cardCategory)) {
+            const extraOption = document.createElement('option');
+            extraOption.value = cardCategory;
+            extraOption.text = cardCategory;
+            categorySelect.add(extraOption);
+        }
+        categorySelect.value = cardCategory;
+
+        document.getElementById('editVisibilitySelect').value = (currentCard.visibility === 'private') ? 'private' : 'public';
+        document.getElementById('editCardStatus').innerText = '';
+
+        document.getElementById('editCardModal').style.display = 'block';
+    }
+
+    function closeEditCardModal() {
+        document.getElementById('editCardModal').style.display = 'none';
+    }
+
+    // Edits the question/answer/category/visibility of the card being reviewed.
+    // Deliberately does NOT touch interval, interval_hours or last_reviewed_at, so
+    // fixing a typo or re-categorising a card cannot disturb its review schedule.
+    async function saveCardEdits() {
+        if (dueQueue.length === 0 || currentIndex >= dueQueue.length) return;
+
+        const currentCard = dueQueue[currentIndex];
+        const question = document.getElementById('editQuestionInput').value.trim();
+        const answer = document.getElementById('editAnswerInput').value.trim();
+        const category = document.getElementById('editCategorySelect').value;
+        const visibility = document.getElementById('editVisibilitySelect').value;
+        const statusDiv = document.getElementById('editCardStatus');
+        const saveButton = document.getElementById('save-card-edits-btn');
+
+        if (!question || !answer) {
+            alert('Please provide both question and answer.');
+            return;
+        }
+
+        const supabaseKey = document.getElementById('supabaseKeyInput').value.trim();
+        if (!supabaseKey) {
+            alert('Please provide your Supabase Anon Key in Settings first.');
+            return;
+        }
+
+        initSupabase(supabaseKey);
+        saveButton.disabled = true;
+        statusDiv.style.color = '#475569';
+        statusDiv.innerText = 'Saving...';
+
+        try {
+            const { error } = await supabaseClient
+                .from('flashcards')
+                .update({ question, answer, category, visibility })
+                .eq('id', currentCard.id);
+
+            if (error) throw error;
+
+            // Keep the in-memory queue/cards in sync so no reload (and no lost
+            // review position) is needed to see the change.
+            currentCard.question = question;
+            currentCard.answer = answer;
+            currentCard.category = category;
+            currentCard.visibility = visibility;
+
+            closeEditCardModal();
+            renderCard(); // refreshes both faces plus the category/visibility badges
+            alert('Card updated successfully!');
+        } catch (err) {
+            console.error(err);
+            statusDiv.style.color = '#dc2626';
+            statusDiv.innerText = 'Error saving changes: ' + err.message;
+        } finally {
+            saveButton.disabled = false;
         }
     }
 </script>
