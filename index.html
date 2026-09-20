@@ -120,7 +120,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.17 (Build 20260920.7)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.18 (Build 20260920.8)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
@@ -996,17 +996,14 @@ ${content}`;
         const currentCard = dueQueue[currentIndex];
         const cardSide = document.getElementById('cardSide');
         const cardProgress = document.getElementById('cardProgress');
-        const cardStats = document.getElementById('cardStats');
         const cardTimeAgo = document.getElementById('cardTimeAgo');
         const activeControls = document.getElementById('activeReviewControls');
 
         // A real card is on screen again: drop any status/error message.
         hideCardMessage();
-        
+
         activeControls.style.display = 'block';
         cardProgress.innerText = `Card ${currentIndex + 1} of ${dueQueue.length}`;
-        cardStats.style.display = 'inline-block';
-        cardStats.innerText = `✓ ${currentCard.correct_count || 0} | ✗ ${currentCard.incorrect_count || 0}`;
 
         const cardCategoryBadge = document.getElementById('cardCategoryBadge');
         const cardVisibilityBadge = document.getElementById('cardVisibilityBadge');
@@ -1055,13 +1052,11 @@ ${content}`;
     function showCompletionScreen() {
         const cardProgress = document.getElementById('cardProgress');
         const cardSide = document.getElementById('cardSide');
-        const cardStats = document.getElementById('cardStats');
         const cardTimeAgo = document.getElementById('cardTimeAgo');
         const activeControls = document.getElementById('activeReviewControls');
 
         cardProgress.innerText = `Completed!`;
         cardSide.innerText = 'Done';
-        cardStats.style.display = 'none';
         cardTimeAgo.style.display = 'none';
         activeControls.style.display = 'none';
 
