@@ -178,6 +178,9 @@ until a commit is pushed to `origin/main`.
    - The flip is CSS-class driven (`#flashcardInner.is-flipped`,
      `backface-visibility: hidden`); only the *visible* face may size the card,
      so both short and long answers render fully.
+   - On review cards, only the category and public/private visibility badges should
+     be shown; the "Known by N" raw counter should be replaced by a percentage that
+     is shown only when it is neither 0% nor 100%.
 8. Keep UI text free of leaked prompt/config data and keep the header button
    labels in sync with the panels they open (current set: Explore Public
    Questions, Add Question Manually, About This Site, Login with Google, ⚙️).

@@ -164,7 +164,6 @@
         <div>
             <span id="cardProgress" class="badge">Card 0 of 0</span>
             <span id="cardSide" class="badge" style="background: #dbeafe; color: #1e40af;">Question</span>
-            <span id="cardStats" class="stats-badge" style="display: inline-block;">✓ 0 | ✗ 0</span>
             <span id="cardCategoryBadge" class="badge-category" style="display: none;"></span>
             <span id="cardVisibilityBadge" class="badge-visibility" style="display: none;"></span>
         </div>
@@ -1017,9 +1016,22 @@ ${content}`;
 
         cardVisibilityBadge.style.display = 'inline-block';
         const isPub = (currentCard.visibility || 'public') === 'public';
-        cardVisibilityBadge.innerText = isPub ? `Public (Known by ${currentCard.known_count || 0})` : 'Private';
         cardVisibilityBadge.style.background = isPub ? '#fef3c7' : '#f1f5f9';
         cardVisibilityBadge.style.color = isPub ? '#b45309' : '#64748b';
+        if (isPub) {
+            const total = (currentCard.correct_count || 0) + (currentCard.incorrect_count || 0);
+            let knownPct = 0;
+            if (total > 0) {
+                knownPct = Math.round(((currentCard.correct_count || 0) / total) * 100);
+            }
+            if (knownPct !== 0 && knownPct !== 100) {
+                cardVisibilityBadge.innerText = `Public (${knownPct}% known)`;
+            } else {
+                cardVisibilityBadge.innerText = 'Public';
+            }
+        } else {
+            cardVisibilityBadge.innerText = 'Private';
+        }
 
         if (currentCard.last_reviewed_at) {
             const diffHours = Math.round((new Date().getTime() - new Date(currentCard.last_reviewed_at).getTime()) / (60 * 60 * 1000));
