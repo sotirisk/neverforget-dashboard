@@ -120,7 +120,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.13 (Build 20260920.3)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.14 (Build 20260920.4)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
@@ -334,6 +334,9 @@
     let lastAuthUserId = null;
     // Monotonic id used to discard stale/overlapping loadFlashcards() responses.
     let loadRequestId = 0;
+    // True while the user is doing an extra "Review Again Now" pass over cards that
+    // are NOT due yet. Such a pass must never advance the spaced-repetition schedule.
+    let practiceSessionActive = false;
 
     // Check URL hash immediately on script load (before DOMContentLoaded) to clear access_token and set session
     if (window.location.hash && window.location.hash.includes('access_token')) {
@@ -847,6 +850,18 @@ ${content}`;
     }
 
 
+    // A card is due when it has never been reviewed, was missed (0h interval), or its
+    // Ebbinghaus interval has fully elapsed since the last review. This is used both
+    // to build the due queue and to tell a scheduled review apart from extra practice.
+    function isCardDue(card, nowMs) {
+        if (!card || !card.last_reviewed_at) return true; // never reviewed = due now
+        const now = nowMs === undefined ? new Date().getTime() : nowMs;
+        const lastReview = new Date(card.last_reviewed_at).getTime();
+        const intervalHours = card.interval_hours || 0;
+        if (intervalHours === 0) return true; // missed card = needs immediate review
+        return (now - lastReview) >= intervalHours * 60 * 60 * 1000;
+    }
+
     // Flashcard Review Logic (Ebbinghaus Forgetting Curve & Due Queue)
     async function loadFlashcards(forceAll = false) {
         // Every new load invalidates any in-flight load, so a slow background
@@ -893,18 +908,13 @@ ${content}`;
         cards = data;
         
         if (forceAll) {
+            practiceSessionActive = true;
             dueQueue = [...cards];
         } else {
+            practiceSessionActive = false;
             // Filter or prioritize due cards based on Ebbinghaus forgetting curve intervals (Hours: 1h -> 6h -> 12h -> 24h -> 48h+ days)
             const now = new Date().getTime();
-            dueQueue = cards.filter(card => {
-                if (!card.last_reviewed_at) return true; // never reviewed = due now
-                const lastReview = new Date(card.last_reviewed_at).getTime();
-                const intervalHours = card.interval_hours || 0;
-                const intervalMs = intervalHours * 60 * 60 * 1000;
-                const isDue = intervalHours === 0 || (now - lastReview >= intervalMs);
-                return isDue;
-            });
+            dueQueue = cards.filter(card => isCardDue(card, now));
 
             // If all cards are up to date (no cards strictly due right now), show completion screen immediately on login
             if (dueQueue.length === 0 && cards.length > 0) {
@@ -994,21 +1004,33 @@ ${content}`;
                     const nextDue = new Date(new Date(card.last_reviewed_at).getTime() + intervalHours * 60 * 60 * 1000);
                     const hoursLeft = Math.max(1, Math.round((nextDue.getTime() - new Date().getTime()) / (60 * 60 * 1000)));
                     if (hoursLeft < minNextReviewHours) minNextReviewHours = hoursLeft;
+                } else {
+                    // 0h interval => the card was missed and is due for immediate review
+                    minNextReviewHours = 0;
                 }
             }
         });
+
+        const nextCheckText = minNextReviewHours === 0
+            ? 'Come back <strong>right away</strong> — a card you missed is due for immediate review.'
+            : `Come back in <strong>${minNextReviewHours} hours</strong> for your next review session!`;
+
+        // An extra "Review Again Now" pass does not advance the schedule, so say so.
+        const completionTitle = practiceSessionActive ? '🎉 Practice complete!' : '🎉 You are OK for now!';
+        const completionText = practiceSessionActive
+            ? 'Extra practice pass: your Ebbinghaus schedule was left untouched, so answering correctly here does <strong>not</strong> push the next review further away. (A card you missed is reset to be due again right away.)'
+            : 'You have successfully answered all due questions for this memory session.<br>Based on the Ebbinghaus Forgetting Curve and your card intervals, your memory retention is optimized.';
 
         // The flip structure is hidden while the completion message is shown, and
         // the is-flipped class is cleared so the next session starts unflipped.
         showCardMessage(`
             <div style="padding: 10px;">
-                <h3 style="color: #16a34a; margin-top: 0;">🎉 You are OK for now!</h3>
+                <h3 style="color: #16a34a; margin-top: 0;">${completionTitle}</h3>
                 <p style="font-size: 15px; color: #475569; line-height: 1.5;">
-                    You have successfully answered all due questions for this memory session.<br>
-                    Based on the Ebbinghaus Forgetting Curve and your card intervals, your memory retention is optimized.
+                    ${completionText}
                 </p>
                 <p style="font-size: 14px; font-weight: bold; color: #1e293b; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                    ⏳ Recommended Next Memory Check:<br>Come back in <strong>${minNextReviewHours} hours</strong> (tomorrow) for your next review session!
+                    ⏳ Recommended Next Memory Check:<br>${nextCheckText}
                 </p>
                 <button onclick="loadFlashcards(true)" class="btn-secondary" style="margin-top: 10px; width: 100%;">Review Again Now</button>
             </div>
@@ -1049,7 +1071,28 @@ ${content}`;
 
         const correctCount = (currentCard.correct_count || 0) + (isCorrect ? 1 : 0);
         const incorrectCount = (currentCard.incorrect_count || 0) + (isCorrect ? 0 : 1);
-        
+
+        // Was this card actually due, or is this an extra practice pass (the "Review
+        // Again Now" button) over a card that is not scheduled yet?
+        const reviewingDueCard = isCardDue(currentCard);
+
+        // Extra practice must NEVER extend the Ebbinghaus schedule. A correct answer
+        // on a card that is not due yet only records the practice attempt; the interval
+        // and last_reviewed_at stay untouched, so the next review is not pushed later.
+        if (isCorrect && !reviewingDueCard) {
+            currentCard.correct_count = correctCount;
+            try {
+                await supabaseClient
+                    .from('flashcards')
+                    .update({ correct_count: correctCount })
+                    .eq('id', currentCard.id);
+            } catch (err) {
+                console.error('Failed to record practice attempt:', err);
+            }
+            nextCard();
+            return;
+        }
+
         // Progression of hours when correct: 0 -> 1h -> 6h -> 12h -> 24h -> 48h (2 days) ...
         let currentHours = currentCard.interval_hours !== undefined && currentCard.interval_hours !== null ? currentCard.interval_hours : (currentCard.interval ? currentCard.interval * 24 : 0);
         let newHours = 0;
