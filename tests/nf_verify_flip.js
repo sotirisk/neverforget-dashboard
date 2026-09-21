@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * nf_verify_flip.js — 98-check behavioral harness for NeverForget Dashboard
+ * nf_verify_flip.js — 101-check behavioral harness for NeverForget Dashboard
  *
  * Extracts the inline <script> from src/index.html, runs it in a sandboxed
- * Node.js environment with a minimal DOM + Supabase mock, and asserts 98 key
+ * Node.js environment with a minimal DOM + Supabase mock, and asserts 101 key
  * behaviours covering flip, Got It / Missed That, edit save, auth listener,
  * card counters, completion screen, and edge cases.
  *
@@ -794,6 +794,15 @@ async function main() {
     context.renderCard();
     assert(mockElements['cardProgress'].innerText === 'Completed!',
         '93. Empty queue properly shows completion status');
+
+    // Ask AI section is only visible while a card is displayed
+    assert(mockElements['ai-section'].style.display === 'none',
+        '97. Ask AI section hidden on the completion screen (no card displayed)');
+
+    setupCards(mockSupabaseInstance, [makeCard({ id: 130, question: 'Q130', answer: 'A130', interval_hours: 0 })]);
+    await new Promise(r => { context.loadFlashcards(false); setTimeout(r, 50); });
+    assert(mockElements['ai-section'].style.display === '',
+        '98. Ask AI section visible while a card is displayed');
 
     // ── Summary ────────────────────────────────────────────────────────────
     console.log(`\n═══════════════════════════════════════════════════`);

@@ -120,7 +120,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.21 (Build 20260921.3)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.22 (Build 20260921.4)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
@@ -206,12 +206,12 @@
             </button>
         </div>
 
-        <div id="ai-section" style="margin-top: 15px; border-top: 1px solid #e0e0e0; padding-top: 10px;">
+        <div id="ai-section" style="margin-top: 15px; border-top: 1px solid #e0e0e0; padding-top: 10px; display: none;">
             <div style="display: flex; gap: 8px; margin-top: 10px;">
                 <input
                     type="text"
                     id="ai-question-input"
-                    placeholder="Ask about this card (e.g., What is scheme?)..."
+                    placeholder="Ask about this card..."
                     style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 0;"
                 />
                 <button
@@ -858,10 +858,13 @@ ${content}`;
     function showCardMessage(content, asHtml = false) {
         const messageEl = document.getElementById('cardMessage');
         const inner = document.getElementById('flashcardInner');
+        const aiSection = document.getElementById('ai-section');
         if (inner) {
             inner.classList.remove('is-flipped');
             inner.style.display = 'none';
         }
+        // The Ask AI box only makes sense while a card is on screen.
+        if (aiSection) aiSection.style.display = 'none';
         showingAnswer = false;
         if (messageEl) {
             if (asHtml) {
@@ -876,8 +879,10 @@ ${content}`;
     function hideCardMessage() {
         const messageEl = document.getElementById('cardMessage');
         const inner = document.getElementById('flashcardInner');
+        const aiSection = document.getElementById('ai-section');
         if (messageEl) messageEl.style.display = 'none';
         if (inner) inner.style.display = '';
+        if (aiSection) aiSection.style.display = '';
     }
 
     // Must be called whenever a new card is shown or the review queue is reset so
