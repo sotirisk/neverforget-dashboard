@@ -4,7 +4,7 @@
 > fix or update this site: what the site does, how it works, where the code lives,
 > and the rules that must be followed on every change.
 
-**Current build:** `v1.2.19 (Build 20260921.1)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
+**Current build:** `v1.2.20 (Build 20260921.2)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
 
 ---
 
@@ -55,8 +55,8 @@ checking with the owner.
 ## 2. How it works (architecture)
 
 - **Single-page app, no framework.** All HTML, CSS, and vanilla JavaScript live in
-  **one file: `src/index.html`** (~1,400 lines). There is no bundler, no router,
-  and no test framework (`npm test` does not exist).
+  **one file: `src/index.html`** (~1,400 lines). There is no bundler and no router;
+  behavioural tests live in `tests/nf_verify_flip.js` (see §5, run with `npm test`).
 - **Backend:** Supabase (`@supabase/supabase-js@2` via CDN).
   - Database table **`flashcards`** — the columns the app reads/writes are:
     `id, question, answer, interval, interval_hours, ease_factor, correct_count,
@@ -125,7 +125,9 @@ neverforget-dashboard/
 ├── config.json                   # SUPABASE_ANON_KEY + GEMINI_API_KEY (checked in)
 ├── android/                      # Capacitor wrapper (generated assets/ are gitignored)
 ├── capacitor.config.json         # appId com.neverforget.app, webDir "www"
-├── package.json                  # scripts: build (copy x3), sync (build + cap sync android)
+├── package.json                  # scripts: test (behavioural harness), build (copy x3), sync (build + cap sync android)
+├── tests/
+│   └── nf_verify_flip.js           # 96-check behavioural test harness (npm test)
 ```
 
 Notes: `CLINE_CONTEXT.md` is the short project context (read it together with this
@@ -152,11 +154,11 @@ until a commit is pushed to `origin/main`.
 4. **After code changes, before committing, run the sync:**
    `npm run sync` (which runs `npm run build` = copy to `www/` + root `index.html`,
    then `npx cap sync android`).
-5. **Verify before pushing.** There is no test framework (`npm test` is a stub),
-   so validate manually: run `node --check` on the extracted inline `<script>`;
-   use the headless-Chrome screenshot recipe with `google-chrome --headless=new`;
-   and check behaviour (flip, Got It / Missed That, edit save, auth listener)
-   against the 93-check harness in `/tmp/nf_verify_flip.js` when available.
+5. **Verify before pushing.** Run `npm test` (`node tests/nf_verify_flip.js` — a
+   96-check behavioural harness that executes the inline `<script>` in a
+   sandboxed Node VM with DOM + Supabase mocks; details in §5 Testing).
+   For visual checks use the headless-Chrome screenshot recipe with
+   `google-chrome --headless=new`.
 
 
 6. **Deploy with the standard one-liner** (this is what pushes the site live):
@@ -184,4 +186,58 @@ until a commit is pushed to `origin/main`.
 8. Keep UI text free of leaked prompt/config data and keep the header button
    labels in sync with the panels they open (current set: Explore Public
    Questions, Add Question Manually, About This Site, Login with Google, ⚙️).
+
+
+---
+
+## 5. Testing
+
+The repo ships a **96-check behavioural test harness**: `tests/nf_verify_flip.js`,
+wired up as `npm test`.
+
+```bash
+npm test            # = node tests/nf_verify_flip.js
+# or with an explicit source file:
+SRC_INDEX=/path/to/src/index.html node tests/nf_verify_flip.js
+```
+
+### How it works
+
+- Reads `src/index.html`, extracts the inline `<script>`, and runs it inside a
+  Node `vm` sandbox with minimal DOM, `localStorage`, and Supabase mocks —
+  no browser and no network needed. `supabase.createClient` returns an
+  in-memory mock whose `auth` object can `emit(event, session)` to drive the
+  app's `onAuthStateChange` listener.
+- `let`-declared app state (`cards`, `dueQueue`, `currentIndex`, `showingAnswer`,
+  `practiceSessionActive`, `retriedCardIds`, `loadRequestId`, `lastAuthUserId`)
+  is exposed through `window.__get…()` bridge functions injected after the
+  script runs.
+- Exits `0` when every check passes, `1` otherwise (CI-safe).
+
+### What the 10 test groups cover
+
+| Group | Checks | Verifies |
+|---|---|---|
+| `isCardDue` | 1–12 | Ebbinghaus due rule (never reviewed / 0h / interval elapsed) |
+| Initial render | 13–24 | Faces, badges, time-ago, controls, flip state |
+| `flipCard` | 25–33 | `is-flipped` class, `showingAnswer`, empty-queue no-op |
+| `nextCard` | 34–38 | Queue advance, flip reset, completion screen |
+| `Got It` ladder | 39–48 | `0→1→6→12→24→48→96→192h`, counts, `last_reviewed_at` |
+| Practice mode | 49–50 | `Got It` during extra practice does NOT reschedule |
+| `Missed That` | 51–58 | Reset to 0h, re-queue **once** per pass (`retriedCardIds`) |
+| Edit card | 59–67 | Question/answer/category/visibility saved; schedule untouched |
+| Auth listener | 68–74 | `INITIAL_SESSION`/`TOKEN_REFRESHED`/`USER_UPDATED` never reload; `SIGNED_IN` (new identity) and `SIGNED_OUT` do; no flip reset |
+| Classifier + edges | 75–96 | `classifyCardContent`, completion screen, empty DB, `forceAll`, message layer |
+
+### Caveats when extending the harness
+
+- `markGotIt()` / `markMissedThat()` are **sync** functions that do not return
+  `updateCardStats()`'s promise. The card object is updated synchronously, but
+  the missed-card re-queue happens after the awaited DB write — so tests that
+  assert the re-queue must `await new Promise(r => setTimeout(r, 60))` first.
+- Session-check auth events set `currentUser` even though they don't reload;
+  emit them with the *current* identity in tests, otherwise later loads filter
+  on the wrong `user_id` and silently return no cards.
+- The repo copy in `tests/` is the source of truth (it superseded the ad-hoc
+  `/tmp/nf_verify_flip.js` used in earlier sessions).
 
