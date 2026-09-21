@@ -4,7 +4,7 @@
 > fix or update this site: what the site does, how it works, where the code lives,
 > and the rules that must be followed on every change.
 
-**Current build:** `v1.2.17 (Build 20260920.7)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
+**Current build:** `v1.2.19 (Build 20260921.1)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
 
 ---
 

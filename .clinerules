@@ -2,4 +2,5 @@
 
 - **Automatic Context Rule**: At the start of every session or task involving this repository, always read `CLINE_CONTEXT.md` first to fully understand the application architecture, file structure, and goals.
 - **Build Versioning Rule**: Whenever code changes are made and before making any git commit, always increment the build version string and timestamp in `src/index.html` (e.g., `v1.2.9 (Build 20260913.9)`) and run `npm run build` (or `npm run sync`) so that `index.html`, `www/index.html`, and `android/` assets are fully synchronized.
+- **Clarify Before Acting Rule**: When something is not clear, ask the user for clarification rather than guessing — this saves tokens and avoids wasted work.
 
