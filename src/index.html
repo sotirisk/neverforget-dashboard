@@ -120,7 +120,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.22 (Build 20260921.4)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.23 (Build 20260921.5)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
@@ -921,6 +921,24 @@ ${content}`;
         return (now - lastReview) >= intervalHours * 60 * 60 * 1000;
     }
 
+    // Total number of distinct persons with data on the site (own rows + public
+    // rows RLS lets us read). Denominator for the "N% known" badge on public cards.
+    let totalPersonsCount = 0;
+
+    async function updateTotalPersonsCount() {
+        try {
+            const { data, error } = await supabaseClient.from('flashcards').select('user_id');
+            if (error) return;
+            const ids = [];
+            (data || []).forEach(row => {
+                if (row && row.user_id && ids.indexOf(row.user_id) === -1) ids.push(row.user_id);
+            });
+            totalPersonsCount = ids.length;
+        } catch (err) {
+            console.error('Failed to count persons with data:', err);
+        }
+    }
+
     // Flashcard Review Logic (Ebbinghaus Forgetting Curve & Due Queue)
     async function loadFlashcards(forceAll = false) {
         // Every new load invalidates any in-flight load, so a slow background
@@ -965,6 +983,7 @@ ${content}`;
         }
 
         cards = data;
+        await updateTotalPersonsCount();
         
         if (forceAll) {
             practiceSessionActive = true;
@@ -1021,10 +1040,12 @@ ${content}`;
         cardVisibilityBadge.style.background = isPub ? '#fef3c7' : '#f1f5f9';
         cardVisibilityBadge.style.color = isPub ? '#b45309' : '#64748b';
         if (isPub) {
-            const total = (currentCard.correct_count || 0) + (currentCard.incorrect_count || 0);
+            // Share of all persons with data on the site who already know this
+            // card (the same known_count the Explore screen reports).
+            const knownCount = currentCard.known_count || 0;
             let knownPct = 0;
-            if (total > 0) {
-                knownPct = Math.round(((currentCard.correct_count || 0) / total) * 100);
+            if (totalPersonsCount > 0) {
+                knownPct = Math.min(100, Math.round((knownCount / totalPersonsCount) * 100));
             }
             if (knownPct !== 0 && knownPct !== 100) {
                 cardVisibilityBadge.innerText = `Public (${knownPct}% known)`;

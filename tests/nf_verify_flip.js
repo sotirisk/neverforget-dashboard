@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * nf_verify_flip.js — 101-check behavioral harness for NeverForget Dashboard
+ * nf_verify_flip.js — 104-check behavioral harness for NeverForget Dashboard
  *
  * Extracts the inline <script> from src/index.html, runs it in a sandboxed
- * Node.js environment with a minimal DOM + Supabase mock, and asserts 101 key
+ * Node.js environment with a minimal DOM + Supabase mock, and asserts 104 key
  * behaviours covering flip, Got It / Missed That, edit save, auth listener,
  * card counters, completion screen, and edge cases.
  *
@@ -803,6 +803,29 @@ async function main() {
     await new Promise(r => { context.loadFlashcards(false); setTimeout(r, 50); });
     assert(mockElements['ai-section'].style.display === '',
         '98. Ask AI section visible while a card is displayed');
+
+    // "Known %" badge = known_count / distinct persons with data on the site
+    setupCards(mockSupabaseInstance, [
+        makeCard({ id: 140, question: 'Q140', answer: 'A140', interval_hours: 0, known_count: 1 }),
+        makeCard({ id: 141, question: 'Q141', answer: 'A141', known_count: 0, user_id: 'u1' }),
+        makeCard({ id: 142, question: 'Q142', answer: 'A142', known_count: 0, user_id: 'u2' }),
+        makeCard({ id: 143, question: 'Q143', answer: 'A143', known_count: 0, user_id: 'u3' }),
+    ]);
+    await new Promise(r => { context.loadFlashcards(false); setTimeout(r, 60); });
+    assert(mockElements['cardVisibilityBadge'].innerText === 'Public (33% known)',
+        `99. Known % = known_count / distinct persons (got: "${mockElements['cardVisibilityBadge'].innerText}")`);
+
+    // 100% known → badge falls back to plain "Public"
+    G.__getCards().find(c => c.id === 140).known_count = 3;
+    context.renderCard();
+    assert(mockElements['cardVisibilityBadge'].innerText === 'Public',
+        `100. 100% known hidden (got: "${mockElements['cardVisibilityBadge'].innerText}")`);
+
+    // 0% known → badge falls back to plain "Public"
+    G.__getCards().find(c => c.id === 140).known_count = 0;
+    context.renderCard();
+    assert(mockElements['cardVisibilityBadge'].innerText === 'Public',
+        `101. 0% known hidden (got: "${mockElements['cardVisibilityBadge'].innerText}")`);
 
     // ── Summary ────────────────────────────────────────────────────────────
     console.log(`\n═══════════════════════════════════════════════════`);

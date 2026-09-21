@@ -4,7 +4,7 @@
 > fix or update this site: what the site does, how it works, where the code lives,
 > and the rules that must be followed on every change.
 
-**Current build:** `v1.2.22 (Build 20260921.4)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
+**Current build:** `v1.2.23 (Build 20260921.5)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
 
 ---
 
@@ -85,6 +85,7 @@ Key in-memory state (module-level `let`s in `src/index.html`):
 | `practiceSessionActive` | `true` during an extra "Review Again Now" pass; `updateCardStats()` must not advance intervals then. |
 | `retriedCardIds` | Card ids already re-queued after a miss this pass (prevents queue growth); cleared in `loadFlashcards()`. |
 | `loadRequestId` | Stale-response guard: increments per `loadFlashcards()` call; a fetch whose request id no longer matches is discarded so background auth/session events never overwrite the card under review. |
+| `totalPersonsCount` | Cached count of distinct persons with data (distinct `user_id`s the client can read via `updateTotalPersonsCount()`); denominator of the "N% known" badge. |
 | `lastAuthUserId` | Only reload cards on a real identity change; `INITIAL_SESSION` / `TOKEN_REFRESHED` / `USER_UPDATED` must never refetch. |
 
 
@@ -127,7 +128,7 @@ neverforget-dashboard/
 ├── capacitor.config.json         # appId com.neverforget.app, webDir "www"
 ├── package.json                  # scripts: test (behavioural harness), build (copy x3), sync (build + cap sync android)
 ├── tests/
-│   └── nf_verify_flip.js           # 101-check behavioural test harness (npm test)
+│   └── nf_verify_flip.js           # 104-check behavioural test harness (npm test)
 ```
 
 Notes: `CLINE_CONTEXT.md` is the short project context (read it together with this
@@ -155,7 +156,7 @@ until a commit is pushed to `origin/main`.
    `npm run sync` (which runs `npm run build` = copy to `www/` + root `index.html`,
    then `npx cap sync android`).
 5. **Verify before pushing.** Run `npm test` (`node tests/nf_verify_flip.js` — a
-   101-check behavioural harness that executes the inline `<script>` in a
+   104-check behavioural harness that executes the inline `<script>` in a
    sandboxed Node VM with DOM + Supabase mocks; details in §5 Testing).
    For visual checks use the headless-Chrome screenshot recipe with
    `google-chrome --headless=new`.
@@ -185,8 +186,10 @@ until a commit is pushed to `origin/main`.
      `backface-visibility: hidden`); only the *visible* face may size the card,
      so both short and long answers render fully.
    - On review cards, only the category and public/private visibility badges should
-     be shown; the "Known by N" raw counter should be replaced by a percentage that
-     is shown only when it is neither 0% nor 100%.
+     be shown; the "Known by N" raw counter is replaced by a percentage computed as
+     `known_count ÷ totalPersonsCount` (distinct persons with data, via
+     `updateTotalPersonsCount()`), capped at 100% and shown only when it is
+     neither 0% nor 100%. It is NOT the card's personal correct/incorrect ratio.
 8. Keep UI text free of leaked prompt/config data and keep the header button
    labels in sync with the panels they open (current set: Explore Public
    Questions, Add Question Manually, About This Site, Login with Google, ⚙️).
@@ -196,7 +199,7 @@ until a commit is pushed to `origin/main`.
 
 ## 5. Testing
 
-The repo ships a **101-check behavioural test harness**: `tests/nf_verify_flip.js`,
+The repo ships a **104-check behavioural test harness**: `tests/nf_verify_flip.js`,
 wired up as `npm test`.
 
 ```bash
@@ -231,7 +234,7 @@ SRC_INDEX=/path/to/src/index.html node tests/nf_verify_flip.js
 | `Missed That` | 51–58 | Reset to 0h, re-queue **once** per pass (`retriedCardIds`) |
 | Edit card | 59–67 | Question/answer/category/visibility saved; schedule untouched |
 | Auth listener | 68–74 | `INITIAL_SESSION`/`TOKEN_REFRESHED`/`USER_UPDATED` never reload; `SIGNED_IN` (new identity) and `SIGNED_OUT` do; no flip reset |
-| Classifier + edges | 75–101 | `classifyCardContent`, completion screen, empty DB, `forceAll`, message layer, due-now card presented immediately (no "come back right away" screen), Ask AI section only visible while a card is displayed |
+| Classifier + edges | 75–104 | `classifyCardContent`, completion screen, empty DB, `forceAll`, message layer, due-now card presented immediately (no "come back right away" screen), Ask AI section only visible while a card is displayed, known-% = `known_count / distinct persons with data` |
 
 ### Caveats when extending the harness
 
