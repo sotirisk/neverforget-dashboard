@@ -120,7 +120,7 @@
 <body>
 
 <div class="header">
-    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.20 (Build 20260921.2)</span></h1>
+    <h1>NeverForget <span style="font-size: 11px; font-weight: normal; color: #64748b; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; margin-left: 6px;" title="Build Version">v1.2.21 (Build 20260921.3)</span></h1>
     <div class="header-actions">
         <button onclick="toggleExploreModal()" class="btn-info" style="background-color: #0284c7;">🌍 Explore Public Questions</button>
         <button onclick="toggleManualCardForm()" class="btn-info">➕ Add Question Manually</button>
@@ -1054,6 +1054,20 @@ ${content}`;
         const cardSide = document.getElementById('cardSide');
         const cardTimeAgo = document.getElementById('cardTimeAgo');
         const activeControls = document.getElementById('activeReviewControls');
+
+        // A card that is due right now (e.g. a just-missed card with
+        // interval_hours = 0) must never reach the "come back right away"
+        // completion screen — present it immediately instead.
+        const nowMs = new Date().getTime();
+        const dueNow = cards.filter(card => isCardDue(card, nowMs));
+        if (dueNow.length > 0) {
+            dueQueue = dueNow;
+            retriedCardIds = [];
+            currentIndex = 0;
+            showingAnswer = false;
+            renderCard();
+            return;
+        }
 
         cardProgress.innerText = `Completed!`;
         cardSide.innerText = 'Done';

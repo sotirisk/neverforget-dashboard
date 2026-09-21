@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * nf_verify_flip.js — 96-check behavioral harness for NeverForget Dashboard
+ * nf_verify_flip.js — 98-check behavioral harness for NeverForget Dashboard
  *
  * Extracts the inline <script> from src/index.html, runs it in a sandboxed
- * Node.js environment with a minimal DOM + Supabase mock, and asserts 96 key
+ * Node.js environment with a minimal DOM + Supabase mock, and asserts 98 key
  * behaviours covering flip, Got It / Missed That, edit save, auth listener,
  * card counters, completion screen, and edge cases.
  *
@@ -500,6 +500,9 @@ async function main() {
     G.__setCurrentIndex(3);
     context.nextCard();
     assert(mockElements['cardProgress'].innerText === 'Card 5 of 5');
+    // Simulate the queued cards having been answered (no longer due) so that
+    // reaching the end of the queue legitimately shows the completion screen.
+    G.__getDueQueue().forEach(c => { c.interval_hours = 24; c.last_reviewed_at = new Date().toISOString(); });
     context.nextCard();
     assert(mockElements['cardProgress'].innerText === 'Completed!',
         '38. nextCard at end shows "Completed!"');
@@ -607,13 +610,13 @@ async function main() {
         `55. Missed card re-queued (queue: ${initialQueueLength} → ${G.__getDueQueue().length})`);
     assert(G.__getRetriedCardIds().includes(40), '56. retriedCardIds contains the missed card id');
 
-    // Same card missed again — should NOT re-queue
+    // Same card missed again — not re-queued within the pass; the due-now
+    // redirect re-presents it immediately instead of "come back right away"
     G.__setCurrentIndex(G.__getDueQueue().length - 1);
-    const queueLenBefore = G.__getDueQueue().length;
     await context.markMissedThat();
     await new Promise(r => setTimeout(r, 60));
-    assert(G.__getDueQueue().length === queueLenBefore,
-        `57. Same card missed again not re-queued (queue: ${queueLenBefore} → ${G.__getDueQueue().length})`);
+    assert(G.__getDueQueue().length === 2 && G.__getCurrentIndex() === 0,
+        `57. Missed-again card re-presented immediately (queue: ${G.__getDueQueue().length}, index: ${G.__getCurrentIndex()})`);
 
     // Card with 0h interval is still re-queued on miss
     G.__getRetriedCardIds().length = 0;
@@ -759,15 +762,37 @@ async function main() {
     assert(mockElements['flashcardInner'].style.display === '',
         `91. hideCardMessage restores flashcardInner (got: "${mockElements['flashcardInner'].style.display}")`);
 
-    // renderCard with empty queue → completion screen
+    // renderCard with empty queue → completion screen (nothing due: card 110
+    // was reviewed just now with a 24h interval)
+    setupCards(mockSupabaseInstance, [makeCard({ id: 110, question: 'Q110', answer: 'A110', interval_hours: 24, last_reviewed_at: new Date().toISOString() })]);
+    await new Promise(r => { context.loadFlashcards(false); setTimeout(r, 50); });
     G.__getDueQueue().length = 0;
     G.__setCurrentIndex(0);
     context.renderCard();
     assert(mockElements['cardProgress'].innerText === 'Completed!',
         '92. renderCard with empty queue → completion screen');
 
-    // Card counter with retried card
-    assert(G.__getDueQueue().length === 0 || mockElements['cardProgress'].innerText === 'Completed!',
+    // A card due right now (just missed, interval_hours = 0) is presented
+    // immediately — never a "come back right away" completion screen
+    setupCards(mockSupabaseInstance, [makeCard({ id: 120, question: 'Q120', answer: 'A120', interval_hours: 0, last_reviewed_at: new Date().toISOString() })]);
+    await new Promise(r => { context.loadFlashcards(false); setTimeout(r, 50); });
+    G.__getDueQueue().length = 0;
+    G.__setCurrentIndex(0);
+    context.renderCard();
+    assert(mockElements['cardFront'].innerText === 'Q120',
+        '94. Due-now (missed) card presented immediately instead of "come back right away"');
+    assert(mockElements['cardProgress'].innerText === 'Card 1 of 1',
+        '95. Progress counter shows the re-presented card');
+    assert(mockElements['cardMessage'].style.display === 'none',
+        '96. No completion message while a due-now card is presented');
+
+    // Empty queue with no due cards at all → completion screen
+    setupCards(mockSupabaseInstance, []);
+    await new Promise(r => { context.loadFlashcards(false); setTimeout(r, 50); });
+    G.__getDueQueue().length = 0;
+    G.__setCurrentIndex(0);
+    context.renderCard();
+    assert(mockElements['cardProgress'].innerText === 'Completed!',
         '93. Empty queue properly shows completion status');
 
     // ── Summary ────────────────────────────────────────────────────────────

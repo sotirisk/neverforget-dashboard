@@ -4,7 +4,7 @@
 > fix or update this site: what the site does, how it works, where the code lives,
 > and the rules that must be followed on every change.
 
-**Current build:** `v1.2.20 (Build 20260921.2)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
+**Current build:** `v1.2.21 (Build 20260921.3)` · **Live site:** `https://sotirisk.github.io/neverforget-dashboard/`
 
 ---
 
@@ -127,7 +127,7 @@ neverforget-dashboard/
 ├── capacitor.config.json         # appId com.neverforget.app, webDir "www"
 ├── package.json                  # scripts: test (behavioural harness), build (copy x3), sync (build + cap sync android)
 ├── tests/
-│   └── nf_verify_flip.js           # 96-check behavioural test harness (npm test)
+│   └── nf_verify_flip.js           # 98-check behavioural test harness (npm test)
 ```
 
 Notes: `CLINE_CONTEXT.md` is the short project context (read it together with this
@@ -155,7 +155,7 @@ until a commit is pushed to `origin/main`.
    `npm run sync` (which runs `npm run build` = copy to `www/` + root `index.html`,
    then `npx cap sync android`).
 5. **Verify before pushing.** Run `npm test` (`node tests/nf_verify_flip.js` — a
-   96-check behavioural harness that executes the inline `<script>` in a
+   98-check behavioural harness that executes the inline `<script>` in a
    sandboxed Node VM with DOM + Supabase mocks; details in §5 Testing).
    For visual checks use the headless-Chrome screenshot recipe with
    `google-chrome --headless=new`.
@@ -172,6 +172,10 @@ until a commit is pushed to `origin/main`.
 7. **Preserve these invariants** (past user-visible bugs — do not regress them):
    - `Missed That 🔄` must reset the card to `interval_hours = 0`, re-queue it
      once per pass (guard with `retriedCardIds`), and advance to another pool card.
+   - A card that is due right now (e.g. just missed, `interval_hours = 0`) must
+     never produce a "come back right away" completion screen — it is presented
+     immediately instead (`showCompletionScreen` rebuilds the due queue and
+     calls `renderCard`).
    - `Got It 👍` during extra practice must NOT change `interval_hours` /
      `last_reviewed_at` (memory-curve rule); card edits must not touch the
      schedule either.
@@ -192,7 +196,7 @@ until a commit is pushed to `origin/main`.
 
 ## 5. Testing
 
-The repo ships a **96-check behavioural test harness**: `tests/nf_verify_flip.js`,
+The repo ships a **98-check behavioural test harness**: `tests/nf_verify_flip.js`,
 wired up as `npm test`.
 
 ```bash
@@ -227,7 +231,7 @@ SRC_INDEX=/path/to/src/index.html node tests/nf_verify_flip.js
 | `Missed That` | 51–58 | Reset to 0h, re-queue **once** per pass (`retriedCardIds`) |
 | Edit card | 59–67 | Question/answer/category/visibility saved; schedule untouched |
 | Auth listener | 68–74 | `INITIAL_SESSION`/`TOKEN_REFRESHED`/`USER_UPDATED` never reload; `SIGNED_IN` (new identity) and `SIGNED_OUT` do; no flip reset |
-| Classifier + edges | 75–96 | `classifyCardContent`, completion screen, empty DB, `forceAll`, message layer |
+| Classifier + edges | 75–98 | `classifyCardContent`, completion screen, empty DB, `forceAll`, message layer, due-now card presented immediately (no "come back right away" screen) |
 
 ### Caveats when extending the harness
 
